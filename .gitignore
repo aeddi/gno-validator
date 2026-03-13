@@ -1,0 +1,9 @@
+# Local secrets
+.env
+
+# Generated at runtime — not tracked (genesis.json is ~200 MB)
+genesis.json
+
+# Node data — contains secrets and chain state
+gnoland-data/
+gnokms-data/
