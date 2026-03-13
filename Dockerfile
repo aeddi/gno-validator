@@ -1,5 +1,5 @@
 # ---- Builder stage: clones gno@master, builds all binaries + genesis tools
-FROM golang:1.23-bookworm AS builder
+FROM golang:1.24-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl jq python3 gzip ca-certificates \
@@ -10,7 +10,7 @@ RUN git clone --depth=1 https://github.com/gnolang/gno.git /gno
 WORKDIR /gno
 
 RUN go build -o /usr/local/bin/gnoland ./gno.land/cmd/gnoland
-RUN go build -o /usr/local/bin/gnokms  ./contribs/gnokms
+RUN go build -C ./contribs/gnokms -o /usr/local/bin/gnokms .
 
 # ---- gnoland final stage
 FROM debian:bookworm-slim AS gnoland
