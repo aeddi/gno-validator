@@ -1,0 +1,54 @@
+name: gno-validator
+
+services:
+  gnokms:
+    build:
+      context: .
+      target: gnokms
+    image: gno-validator-gnokms
+    command: >
+      sh -c 'echo "$$GNOKMS_PASSWORD" | gnokms gnokey
+      -insecure-password-stdin
+      -home /gnokms-data/keystore
+      -listener unix:///sock/gnokms.sock
+      $$GNOKMS_KEY_NAME'
+    env_file: .env
+    volumes:
+      - ./gnokms-data:/gnokms-data
+      - gnokms-sock:/sock
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1g"
+        max-file: "1"
+
+  gnoland:
+    build:
+      context: .
+      target: gnoland
+    image: gno-validator-gnoland
+    command: >
+      gnoland start
+      --skip-genesis-sig-verification
+      -data-dir /gnoland-data
+      -genesis /genesis.json
+    volumes:
+      - ./gnoland-data:/gnoland-data
+      - ./genesis.json:/genesis.json:ro
+      - gnokms-sock:/sock
+    ports:
+      - "26657:26657"
+      - "26656:26656"
+    depends_on:
+      gnokms:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1g"
+        max-file: "30"
+
+volumes:
+  gnokms-sock:
