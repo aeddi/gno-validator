@@ -40,6 +40,8 @@ make init
 Builds images, generates `genesis.json` (~200 MB, takes several minutes on first run),
 and initializes `gnoland-data/config/config.toml` and `gnoland-data/secrets/`.
 
+> **Warning:** Only run `make init` once. Re-running it on an existing node will overwrite your config and secrets.
+
 ### 4. Edit the node config
 
 ```sh
