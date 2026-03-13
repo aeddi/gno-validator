@@ -1,6 +1,7 @@
 .PHONY: init genesis build up down restart logs logs-gnoland logs-gnokms status update
 
 init: build genesis ## First-time setup: build images, generate genesis, init node config/secrets
+	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
 	docker compose run --rm gnoland gnoland config init \
 		-config-path /gnoland-data/config/config.toml
