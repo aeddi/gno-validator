@@ -13,7 +13,7 @@ services:
       -insecure-password-stdin
       -home /gnokms-data/keystore
       -listener unix:///sock/gnokms.sock
-      $$GNOKMS_KEY_NAME'
+      gnokms-docker-key'
     env_file: .env
     volumes:
       - ./gnokms-data:/gnokms-data

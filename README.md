@@ -19,7 +19,6 @@ cp .env.example .env
 
 Edit `.env` and set:
 - `GNOKMS_PASSWORD` — password to decrypt your signing key
-- `GNOKMS_KEY_NAME` — name of the key in `gnokms-data/keystore/`
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
@@ -29,10 +28,10 @@ Edit `.env` and set:
 Add your validator signing key to `gnokms-data/keystore/`:
 
 ```sh
-make add-key KEYNAME=<name>
+make add-key
 ```
 
-You will be prompted for a password by `gnokey`. The key name must match `GNOKMS_KEY_NAME` in `.env`.
+You will be prompted for a password by `gnokey`. The key is stored under the fixed name `gnokms-docker-key`.
 
 ### 3. Provide genesis.json
 
@@ -79,7 +78,7 @@ make up
 | `make logs-gnoland` | Follow gnoland logs |
 | `make logs-gnokms` | Follow gnokms logs |
 | `make status` | Show container status |
-| `make add-key KEYNAME=<name>` | Add a signing key to the gnokms keystore |
+| `make add-key` | Add the signing key to the gnokms keystore |
 | `make build` | Rebuild Docker images |
 | `make update` | Rebuild images and restart (binary update) |
 
