@@ -25,13 +25,22 @@ gen-identity: ## Generate the validator signing identity in the gnokms keystore
 		echo "Note: using GNOKMS_PASSWORD from .env (password not shown)"; \
 		pass=$$(grep -E '^GNOKMS_PASSWORD=' .env | cut -d= -f2-) && \
 		printf '%s\n%s\n' "$$pass" "$$pass" | \
-		gnokey add gnokms-docker-key --home gnokms-data/keystore --insecure-password-stdin; \
+		docker run --rm -i \
+			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
+			gno-validator-gnokms \
+			gnokey add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin; \
 	else \
-		gnokey add gnokms-docker-key --home gnokms-data/keystore; \
+		docker run --rm -it \
+			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
+			gno-validator-gnokms \
+			gnokey add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
 print-identity: ## Print the validator identity (address and public key) from the keystore
-	gnokey list --home gnokms-data/keystore
+	docker run --rm \
+		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
+		gno-validator-gnokms \
+		gnokey list --home /gnokms-data/keystore
 
 build: ## Build Docker images
 	docker compose build

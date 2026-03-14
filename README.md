@@ -7,7 +7,6 @@ Both services are built from source (`gnolang/gno`).
 
 - Docker and Docker Compose v2
 - make
-- `gnokey` — for populating the gnokms keystore (install from [gnolang/gno](https://github.com/gnolang/gno))
 
 ## Setup
 
