@@ -81,6 +81,7 @@ make up
 | `make print-identity` | Print the validator address and public key |
 | `make build` | Rebuild Docker images |
 | `make update` | Rebuild images and restart (binary update) |
+| `make reset` | Reset node state (removes db/wal, resets priv_validator_state.json) |
 
 > After editing `gnoland-data/config/config.toml`: run `make down && make up` to apply changes.
 

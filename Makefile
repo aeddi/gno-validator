@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init gen-identity print-identity build up down restart logs logs-gnoland logs-gnokms status update .check-env
+.PHONY: init gen-identity print-identity build up down restart logs logs-gnoland logs-gnokms status update reset .check-env
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
@@ -70,6 +70,12 @@ logs-gnokms: ## Follow gnokms logs
 
 status: ## Show container status
 	docker compose ps
+
+reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
+	@echo "WARNING: This will erase the node state. Ensure the node is stopped ('make down') first."
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	rm -rf gnoland-data/db gnoland-data/wal
+	printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' > gnoland-data/secrets/priv_validator_state.json
 
 update: .check-env build ## Rebuild images and restart (binary update)
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
