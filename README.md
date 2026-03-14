@@ -23,15 +23,13 @@ Edit `.env` and set:
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
 
-### 2. Populate the gnokms keystore
-
-Add your validator signing key to `gnokms-data/keystore/`:
+### 2. Generate the signing identity
 
 ```sh
-make add-key
+make gen-identity
 ```
 
-The key is stored under the fixed name `gnokms-docker-key`.
+Creates the key `gnokms-docker-key` in `gnokms-data/keystore/`.
 - If `GNOKMS_PASSWORD` is set in `.env`, it is used automatically (no prompt).
 - Otherwise, `gnokey` will prompt you interactively.
 
@@ -80,7 +78,8 @@ make up
 | `make logs-gnoland` | Follow gnoland logs |
 | `make logs-gnokms` | Follow gnokms logs |
 | `make status` | Show container status |
-| `make add-key` | Add the signing key to the gnokms keystore |
+| `make gen-identity` | Generate the validator signing identity |
+| `make print-identity` | Print the validator address and public key |
 | `make build` | Rebuild Docker images |
 | `make update` | Rebuild images and restart (binary update) |
 
