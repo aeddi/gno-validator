@@ -52,6 +52,14 @@ up: .check-env ## Start all services
 	else \
 		docker compose up -d; \
 	fi
+	@echo "Waiting for gnokms to start..." && sleep 5 && \
+		if ! docker inspect --format '{{.State.Running}}' \
+				$$(docker compose ps -q gnokms) 2>/dev/null | grep -q true; then \
+			echo "Error: gnokms failed to start." >&2; \
+			docker compose logs --no-log-prefix gnokms; \
+			docker compose down; \
+			exit 1; \
+		fi
 
 down: ## Stop and remove containers
 	docker compose down
@@ -84,3 +92,11 @@ update: .check-env build ## Rebuild images and restart (binary update)
 	else \
 		docker compose up -d; \
 	fi
+	@echo "Waiting for gnokms to start..." && sleep 5 && \
+		if ! docker inspect --format '{{.State.Running}}' \
+				$$(docker compose ps -q gnokms) 2>/dev/null | grep -q true; then \
+			echo "Error: gnokms failed to start." >&2; \
+			docker compose logs --no-log-prefix gnokms; \
+			docker compose down; \
+			exit 1; \
+		fi
