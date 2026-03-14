@@ -26,13 +26,13 @@ Edit `.env` and set:
 
 ### 2. Populate the gnokms keystore
 
-Before first run, add your validator signing key to `gnokms-data/keystore/` using `gnokey`:
+Add your validator signing key to `gnokms-data/keystore/`:
 
 ```sh
-gnokey add --recover <GNOKMS_KEY_NAME> --home gnokms-data/keystore
+make add-key KEYNAME=<name>
 ```
 
-The key name must match `GNOKMS_KEY_NAME` in `.env`.
+You will be prompted for a password by `gnokey`. The key name must match `GNOKMS_KEY_NAME` in `.env`.
 
 ### 3. Provide genesis.json
 
@@ -79,6 +79,7 @@ make up
 | `make logs-gnoland` | Follow gnoland logs |
 | `make logs-gnokms` | Follow gnokms logs |
 | `make status` | Show container status |
+| `make add-key KEYNAME=<name>` | Add a signing key to the gnokms keystore |
 | `make build` | Rebuild Docker images |
 | `make update` | Rebuild images and restart (binary update) |
 
