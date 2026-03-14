@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 .PHONY: init add-key build up down restart logs logs-gnoland logs-gnokms status update .check-env
 
 .check-env:
@@ -15,17 +17,29 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@echo ""
 	@echo "Init complete. Before running 'make up':"
 	@echo "  1. Edit gnoland-data/config/config.toml — set moniker and p2p.external_address"
-	@echo "  2. Populate gnokms-data/keystore/ with your signing key (name must match GNOKMS_KEY_NAME in .env)"
+	@echo "  2. Copy genesis.json to the repo root"
 
 add-key: ## Add the signing key to the gnokms keystore
 	@mkdir -p gnokms-data/keystore
-	gnokey add gnokms-docker-key --home gnokms-data/keystore
+	@if grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
+		echo "Note: using GNOKMS_PASSWORD from .env (password not shown)"; \
+		pass=$$(grep -E '^GNOKMS_PASSWORD=' .env | cut -d= -f2-) && \
+		printf '%s\n%s\n' "$$pass" "$$pass" | \
+		gnokey add gnokms-docker-key --home gnokms-data/keystore --insecure-password-stdin; \
+	else \
+		gnokey add gnokms-docker-key --home gnokms-data/keystore; \
+	fi
 
 build: ## Build Docker images
 	docker compose build
 
-up: ## Start all services
-	docker compose up -d
+up: .check-env ## Start all services
+	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GNOKMS_PASSWORD: " pass && echo "" && \
+		GNOKMS_PASSWORD="$$pass" docker compose up -d; \
+	else \
+		docker compose up -d; \
+	fi
 
 down: ## Stop and remove containers
 	docker compose down
@@ -45,5 +59,10 @@ logs-gnokms: ## Follow gnokms logs
 status: ## Show container status
 	docker compose ps
 
-update: build ## Rebuild images and restart (binary update)
-	docker compose up -d
+update: .check-env build ## Rebuild images and restart (binary update)
+	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GNOKMS_PASSWORD: " pass && echo "" && \
+		GNOKMS_PASSWORD="$$pass" docker compose up -d; \
+	else \
+		docker compose up -d; \
+	fi

@@ -9,12 +9,15 @@ services:
         GNO_VERSION: ${GNO_VERSION:-master}
     image: gno-validator-gnokms
     command: >
-      sh -c 'echo "$$GNOKMS_PASSWORD" | gnokms gnokey
+      sh -c 'test -n "$$GNOKMS_PASSWORD"
+      || { echo "Error: GNOKMS_PASSWORD is not set" >&2; exit 1; };
+      echo "$$GNOKMS_PASSWORD" | gnokms gnokey
       -insecure-password-stdin
       -home /gnokms-data/keystore
       -listener unix:///sock/gnokms.sock
       gnokms-docker-key'
-    env_file: .env
+    environment:
+      GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
     volumes:
       - ./gnokms-data:/gnokms-data
       - gnokms-sock:/sock
