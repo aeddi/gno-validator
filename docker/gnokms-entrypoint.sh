@@ -40,6 +40,9 @@ kill "$probe_pid" 2>/dev/null || true
 wait "$probe_pid" 2>/dev/null || true
 rm -f "$probe_sock"
 
+# ---- Clean up stale socket from a previous run (named volume persists across restarts)
+rm -f /sock/gnokms.sock
+
 # ---- Start gnokms with signal forwarding for clean container shutdown
 mkfifo /tmp/gnokms-pass-$$
 printf '%s\n' "$GNOKMS_PASSWORD" > /tmp/gnokms-pass-$$ &
