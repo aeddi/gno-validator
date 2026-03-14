@@ -1,9 +1,9 @@
-.PHONY: init genesis build up down restart logs logs-gnoland logs-gnokms status update .check-env
+.PHONY: init build up down restart logs logs-gnoland logs-gnokms status update .check-env
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
 
-init: .check-env build genesis ## First-time setup: build images, generate genesis, init node config/secrets
+init: .check-env build ## First-time setup: build images, init node config/secrets
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
 	docker compose run --rm gnoland gnoland config init \
 		-config-path /gnoland-data/config/config.toml
@@ -16,14 +16,6 @@ init: .check-env build genesis ## First-time setup: build images, generate genes
 	@echo "Init complete. Before running 'make up':"
 	@echo "  1. Edit gnoland-data/config/config.toml — set moniker and p2p.external_address"
 	@echo "  2. Populate gnokms-data/keystore/ with your signing key (name must match GNOKMS_KEY_NAME in .env)"
-
-genesis: ## Generate genesis.json (~200 MB, takes a few minutes)
-	docker build --target builder -t gno-validator-builder .
-	touch genesis.json
-	docker run --rm \
-		-v "$(CURDIR)/genesis.json:/gno/misc/deployments/gnoland1/genesis.json" \
-		gno-validator-builder \
-		bash -c "cd /gno/misc/deployments/gnoland1 && ./gen-genesis.sh"
 
 build: ## Build Docker images
 	docker compose build

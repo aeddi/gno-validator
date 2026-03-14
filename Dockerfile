@@ -1,11 +1,14 @@
-# ---- Builder stage: clones gno@master, builds all binaries + genesis tools
+# ---- Builder stage: clones gno source, builds gnoland and gnokms binaries
 FROM golang:1.24-bookworm AS builder
 
+ARG GNO_VERSION=master
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl jq python3 gzip ca-certificates \
+    git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth=1 https://github.com/gnolang/gno.git /gno
+RUN git clone https://github.com/gnolang/gno.git /gno && \
+    git -C /gno checkout ${GNO_VERSION}
 
 WORKDIR /gno
 

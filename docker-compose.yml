@@ -5,6 +5,8 @@ services:
     build:
       context: .
       target: gnokms
+      args:
+        GNO_VERSION: ${GNO_VERSION:-master}
     image: gno-validator-gnokms
     command: >
       sh -c 'echo "$$GNOKMS_PASSWORD" | gnokms gnokey
@@ -27,6 +29,8 @@ services:
     build:
       context: .
       target: gnoland
+      args:
+        GNO_VERSION: ${GNO_VERSION:-master}
     image: gno-validator-gnoland
     command: >
       gnoland start
@@ -38,8 +42,8 @@ services:
       - ./genesis.json:/genesis.json:ro
       - gnokms-sock:/sock
     ports:
-      - "26657:26657"
-      - "26656:26656"
+      - "${GNOLAND_RPC_PORT:-26657}:26657"
+      - "${GNOLAND_P2P_PORT:-26656}:26656"
     depends_on:
       gnokms:
         condition: service_started
