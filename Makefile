@@ -26,21 +26,24 @@ gen-identity: ## Generate the validator signing identity in the gnokms keystore
 		pass=$$(grep -E '^GNOKMS_PASSWORD=' .env | cut -d= -f2-) && \
 		printf '%s\n%s\n' "$$pass" "$$pass" | \
 		docker run --rm -i \
+			--entrypoint gnokey \
 			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 			gno-validator-gnokms \
-			gnokey add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin; \
+			add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin; \
 	else \
 		docker run --rm -it \
+			--entrypoint gnokey \
 			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 			gno-validator-gnokms \
-			gnokey add gnokms-docker-key --home /gnokms-data/keystore; \
+			add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
 print-identity: ## Print the validator identity (address and public key) from the keystore
 	docker run --rm \
+		--entrypoint gnokey \
 		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 		gno-validator-gnokms \
-		gnokey list --home /gnokms-data/keystore
+		list --home /gnokms-data/keystore
 
 build: ## Build Docker images
 	docker compose build
@@ -52,14 +55,6 @@ up: .check-env ## Start all services
 	else \
 		docker compose up -d; \
 	fi
-	@echo "Waiting for gnokms to start..." && sleep 5 && \
-		if ! docker inspect --format '{{.State.Running}}' \
-				$$(docker compose ps -q gnokms) 2>/dev/null | grep -q true; then \
-			echo "Error: gnokms failed to start." >&2; \
-			docker compose logs --no-log-prefix gnokms; \
-			docker compose down; \
-			exit 1; \
-		fi
 
 down: ## Stop and remove containers
 	docker compose down
@@ -92,11 +87,3 @@ update: .check-env build ## Rebuild images and restart (binary update)
 	else \
 		docker compose up -d; \
 	fi
-	@echo "Waiting for gnokms to start..." && sleep 5 && \
-		if ! docker inspect --format '{{.State.Running}}' \
-				$$(docker compose ps -q gnokms) 2>/dev/null | grep -q true; then \
-			echo "Error: gnokms failed to start." >&2; \
-			docker compose logs --no-log-prefix gnokms; \
-			docker compose down; \
-			exit 1; \
-		fi
