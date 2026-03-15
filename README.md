@@ -20,8 +20,10 @@ Edit `.env` and set:
 
 - `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make up` and `make update` will prompt for it at startup.
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
+- `GNO_REPO` — GitHub repo slug to clone gno sources from (default: `gnolang/gno`)
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
+- `GRAFANA_PORT` — host port for the Grafana web UI (default: `3000`)
 
 ### 2. Generate the signing identity
 
@@ -69,6 +71,12 @@ Required fields to update:
 make up
 ```
 
+### 7. Open Grafana
+
+Once the stack is up, open the Grafana dashboard at [http://localhost:3000](http://localhost:3000) (or the port set in `GRAFANA_PORT`).
+
+No login required — anonymous access is enabled with Admin role.
+
 ## Operations
 
 | Command               | Description                                                         |
@@ -92,9 +100,14 @@ make up
 
 - **gnoland** exposes RPC (`GNOLAND_RPC_PORT`, default `26657`) and P2P (`GNOLAND_P2P_PORT`, default `26656`) to the host.
 - **gnokms** communicates with gnoland over a Unix socket — no network port is exposed.
+- **otelcol** receives traces from gnoland and forwards them to tempo.
+- **tempo** stores distributed traces.
+- **prometheus** scrapes metrics from otelcol.
+- **grafana** exposes the observability dashboard (`GRAFANA_PORT`, default `3000`) — backed by prometheus and tempo.
 - `gnoland-data/`, `gnokms-data/`, and `genesis.json` are gitignored — back them up.
 
 ## Logging
 
 - gnoland: up to 30 GB (30 × 1 GB files, rotated)
 - gnokms: up to 1 GB
+- otelcol, tempo, prometheus, grafana: up to 100 MB each

@@ -13,7 +13,11 @@ gnoland config set consensus.priv_validator.remote_signer.server_address unix://
   -config-path "$CONFIG"
 gnoland config set telemetry.metrics_enabled true \
   -config-path "$CONFIG"
-gnoland config set telemetry.exporter_endpoint otelcol:4317 \
+gnoland config set telemetry.traces_enabled true \
+  -config-path "$CONFIG"
+gnoland config set telemetry.exporter_endpoint http://otelcol:4318 \
+  -config-path "$CONFIG"
+gnoland config set telemetry.service_instance_id validator \
   -config-path "$CONFIG"
 
 exec "$@"

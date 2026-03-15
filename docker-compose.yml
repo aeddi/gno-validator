@@ -56,7 +56,22 @@ services:
     otelcol:
         image: otel/opentelemetry-collector-contrib:latest
         volumes:
-            - ./otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
+            - ./telemetry/otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
+        depends_on:
+            tempo:
+                condition: service_started
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '100m'
+                max-file: '1'
+
+    tempo:
+        image: grafana/tempo:latest
+        command: ['-config.file=/etc/tempo.yaml']
+        volumes:
+            - ./telemetry/tempo.yml:/etc/tempo.yaml:ro
         restart: unless-stopped
         logging:
             driver: json-file
@@ -67,9 +82,7 @@ services:
     prometheus:
         image: prom/prometheus:latest
         volumes:
-            - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-        ports:
-            - '${PROMETHEUS_PORT:-9090}:9090'
+            - ./telemetry/prometheus.yml:/etc/prometheus/prometheus.yml:ro
         depends_on:
             otelcol:
                 condition: service_started
@@ -80,5 +93,28 @@ services:
                 max-size: '100m'
                 max-file: '1'
 
+    grafana:
+        image: grafana/grafana:latest
+        environment:
+            - GF_AUTH_ANONYMOUS_ENABLED=true
+            - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+        volumes:
+            - grafana_data:/var/lib/grafana
+            - ./grafana/provisioning:/etc/grafana/provisioning:ro
+        ports:
+            - '${GRAFANA_PORT:-3000}:3000'
+        depends_on:
+            prometheus:
+                condition: service_started
+            tempo:
+                condition: service_started
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '100m'
+                max-file: '1'
+
 volumes:
     gnokms-sock:
+    grafana_data:
