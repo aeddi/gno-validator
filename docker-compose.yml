@@ -1,53 +1,82 @@
 name: gno-validator
 
 services:
-  gnokms:
-    build:
-      context: .
-      target: gnokms
-      args:
-        GNO_VERSION: ${GNO_VERSION:-master}
-    image: gno-validator-gnokms
-    environment:
-      GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
-    volumes:
-      - ./gnokms-data:/gnokms-data
-      - gnokms-sock:/sock
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1g"
-        max-file: "1"
+    gnokms:
+        build:
+            context: .
+            target: gnokms
+            args:
+                GNO_VERSION: ${GNO_VERSION:-master}
+        image: gno-validator-gnokms
+        environment:
+            GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
+        volumes:
+            - ./gnokms-data:/gnokms-data
+            - gnokms-sock:/sock
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '1g'
+                max-file: '1'
 
-  gnoland:
-    build:
-      context: .
-      target: gnoland
-      args:
-        GNO_VERSION: ${GNO_VERSION:-master}
-    image: gno-validator-gnoland
-    command: >
-      gnoland start
-      --skip-genesis-sig-verification
-      -data-dir /gnoland-data
-      -genesis /genesis.json
-    volumes:
-      - ./gnoland-data:/gnoland-data
-      - ./genesis.json:/genesis.json:ro
-      - gnokms-sock:/sock
-    ports:
-      - "${GNOLAND_RPC_PORT:-26657}:26657"
-      - "${GNOLAND_P2P_PORT:-26656}:26656"
-    depends_on:
-      gnokms:
-        condition: service_started
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1g"
-        max-file: "30"
+    gnoland:
+        build:
+            context: .
+            target: gnoland
+            args:
+                GNO_VERSION: ${GNO_VERSION:-master}
+        image: gno-validator-gnoland
+        command: >
+            gnoland start
+            --skip-genesis-sig-verification
+            -data-dir /gnoland-data
+            -genesis /genesis.json
+        volumes:
+            - ./gnoland-data:/gnoland-data
+            - ./genesis.json:/genesis.json:ro
+            - gnokms-sock:/sock
+        ports:
+            - '${GNOLAND_RPC_PORT:-26657}:26657'
+            - '${GNOLAND_P2P_PORT:-26656}:26656'
+        depends_on:
+            gnokms:
+                condition: service_started
+            otelcol:
+                condition: service_started
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '1g'
+                max-file: '30'
+
+    otelcol:
+        image: otel/opentelemetry-collector-contrib:latest
+        volumes:
+            - ./otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '100m'
+                max-file: '1'
+
+    prometheus:
+        image: prom/prometheus:latest
+        volumes:
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        ports:
+            - '${PROMETHEUS_PORT:-9090}:9090'
+        depends_on:
+            otelcol:
+                condition: service_started
+        restart: unless-stopped
+        logging:
+            driver: json-file
+            options:
+                max-size: '100m'
+                max-file: '1'
 
 volumes:
-  gnokms-sock:
+    gnokms-sock:
