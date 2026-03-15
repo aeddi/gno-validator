@@ -15,6 +15,9 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@echo "Init complete. Before running 'make up':"
 	@echo "  1. Edit gnoland-data/config/config.toml — set moniker and p2p.external_address"
 	@echo "  2. Copy genesis.json to the repo root"
+	@echo ""
+	@echo "  Note: consensus remote signer and telemetry settings are applied automatically on"
+	@echo "        each start — manual edits to those keys in config.toml will be overwritten."
 
 gen-identity: ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore

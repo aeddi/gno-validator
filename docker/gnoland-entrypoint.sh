@@ -17,3 +17,4 @@ gnoland config set telemetry.exporter_endpoint otelcol:4317 \
   -config-path "$CONFIG"
 
 exec "$@"
+
