@@ -2,9 +2,10 @@
 FROM    golang:1.24-alpine AS builder
 ENV     GNOROOT="/gnoroot"
 ARG     GNO_VERSION=master
+ARG     GNO_REPO=gnolang/gno
 
 RUN     apk add --no-cache git ca-certificates
-RUN     git clone https://github.com/gnolang/gno.git /gnoroot
+RUN     git clone https://github.com/${GNO_REPO}.git /gnoroot
 RUN     git -C /gnoroot checkout ${GNO_VERSION}
 
 WORKDIR /gnoroot
