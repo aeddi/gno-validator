@@ -45,12 +45,13 @@ rm -f /sock/gnokms.sock
 
 # ---- Start gnokms with signal forwarding for clean container shutdown
 mkfifo /tmp/gnokms-pass-$$
-printf '%s\n' "$GNOKMS_PASSWORD" > /tmp/gnokms-pass-$$ &
+printf '%s\n' "$GNOKMS_PASSWORD" >/tmp/gnokms-pass-$$ &
 gnokms gnokey \
   -insecure-password-stdin \
   -home "$KEYSTORE" \
   -listener unix:///sock/gnokms.sock \
-  "$KEYNAME" < /tmp/gnokms-pass-$$ &
+  -log-level debug \
+  "$KEYNAME" </tmp/gnokms-pass-$$ &
 gnokms_pid=$!
 rm -f /tmp/gnokms-pass-$$
 
