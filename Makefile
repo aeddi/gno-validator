@@ -9,9 +9,6 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
 	docker compose run --rm gnoland gnoland config init \
 		-config-path /gnoland-data/config/config.toml
-	docker compose run --rm gnoland gnoland config set \
-		consensus.priv_validator.remote_signer.server_address unix:///sock/gnokms.sock \
-		-config-path /gnoland-data/config/config.toml
 	docker compose run --rm gnoland gnoland secrets init \
 		-data-dir /gnoland-data/secrets
 	@echo ""

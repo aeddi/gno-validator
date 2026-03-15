@@ -26,6 +26,11 @@ COPY    --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
 COPY    --from=builder /gnoroot/gnovm/stdlibs /gnoroot/gnovm/stdlibs
 COPY    --from=builder /gnoroot/gnovm/tests/stdlibs /gnoroot/gnovm/tests/stdlibs
 
+COPY    docker/gnoland-entrypoint.sh /entrypoint.sh
+RUN     chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+
 # ----- gnokms final stage
 FROM    alpine:3 AS gnokms
 
