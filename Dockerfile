@@ -1,38 +1,39 @@
-# ---- Builder stage: clones gno source, builds gnoland, gnokms, and gnokey binaries
-FROM golang:1.24-bookworm AS builder
+# ----- Builder stage: clones gno source, builds gnoland, gnokms, and gnokey binaries
+FROM    golang:1.24-alpine AS builder
+ENV     GNOROOT="/gnoroot"
+ARG     GNO_VERSION=master
 
-ARG GNO_VERSION=master
+RUN     apk add --no-cache git ca-certificates
+RUN     git clone https://github.com/gnolang/gno.git /gnoroot
+RUN     git -C /gnoroot checkout ${GNO_VERSION}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  git ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+WORKDIR /gnoroot
 
-RUN git clone https://github.com/gnolang/gno.git /gno && \
-  git -C /gno checkout ${GNO_VERSION}
+RUN     go build -o /usr/local/bin/gnoland ./gno.land/cmd/gnoland
+RUN     go build -C ./contribs/gnokms -o /usr/local/bin/gnokms .
+RUN     go build -o /usr/local/bin/gnokey ./gno.land/cmd/gnokey
 
-WORKDIR /gno
+# ----- gnoland final stage
+FROM    alpine:3 AS gnoland
+ENV     GNOROOT="/gnoroot"
 
-RUN go build -o /usr/local/bin/gnoland ./gno.land/cmd/gnoland
-RUN go build -C ./contribs/gnokms -o /usr/local/bin/gnokms .
-RUN go build -o /usr/local/bin/gnokey ./gno.land/cmd/gnokey
+RUN     apk add --no-cache ca-certificates
 
-# ---- gnoland final stage
-FROM debian:bookworm-slim AS gnoland
+WORKDIR /gnoroot
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+COPY    --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
+COPY    --from=builder /gnoroot/gnovm/stdlibs /gnoroot/gnovm/stdlibs
+COPY    --from=builder /gnoroot/gnovm/tests/stdlibs /gnoroot/gnovm/tests/stdlibs
 
-COPY --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
+# ----- gnokms final stage
+FROM    alpine:3 AS gnokms
 
-# ---- gnokms final stage
-FROM debian:bookworm-slim AS gnokms
+RUN     apk add --no-cache ca-certificates
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+COPY    --from=builder /usr/local/bin/gnokms /usr/local/bin/gnokms
+COPY    --from=builder /usr/local/bin/gnokey /usr/local/bin/gnokey
 
-COPY --from=builder /usr/local/bin/gnokms /usr/local/bin/gnokms
-COPY --from=builder /usr/local/bin/gnokey /usr/local/bin/gnokey
-COPY docker/gnokms-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY    docker/gnokms-entrypoint.sh /entrypoint.sh
+RUN     chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
