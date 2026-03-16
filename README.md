@@ -19,7 +19,7 @@ cp .env.example .env
 
 Edit `.env` and set:
 
-- `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make up` and `make update` will prompt for it at startup.
+- `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make up` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
 - `GNO_REPO` — GitHub repo slug to clone gno sources from (default: `gnolang/gno`)
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
@@ -106,6 +106,16 @@ No login required — anonymous access is enabled with Admin role.
 - **prometheus** scrapes metrics from otelcol.
 - **grafana** exposes the observability dashboard (`GRAFANA_PORT`, default `3000`) — backed by prometheus and tempo.
 - `gnoland-data/`, `gnokms-data/`, and `genesis.json` are gitignored — back them up.
+
+## Password security
+
+The keystore is encrypted with `GNOKMS_PASSWORD`. In production, **do not store this password on disk** — including `.env`.
+
+If the password is written to `.env`, an attacker who dumps the disk (via snapshot, backup exfiltration, or physical access) gets both the encrypted keystore and the key to decrypt it. Keeping the password only in RAM means disk access alone is not enough.
+
+**Recommended approach:** leave `GNOKMS_PASSWORD` unset and let `make up` / `make update` prompt you interactively at startup. The password is then held only in memory for the lifetime of the process.
+
+**If you must inject the password non-interactively** (e.g. in a supervised init system), pass it as a runtime environment variable rather than persisting it to a file. Be aware that this still exposes the password in `/proc/<pid>/environ` and potentially in shell history — use a secrets manager or a systemd `EnvironmentFile` with `0600` permissions and consider whether the trade-off is acceptable for your threat model.
 
 ## Logging
 
