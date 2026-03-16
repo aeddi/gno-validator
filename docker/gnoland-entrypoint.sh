@@ -20,5 +20,9 @@ gnoland config set telemetry.exporter_endpoint http://otelcol:4318 \
 gnoland config set telemetry.service_instance_id validator \
   -config-path "$CONFIG"
 
+if [ -n "$GNOLAND_EARLY_START" ]; then
+  set -- "$@" --x-early-start
+fi
+
 exec "$@"
 

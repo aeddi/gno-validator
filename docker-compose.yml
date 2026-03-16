@@ -29,11 +29,16 @@ services:
                 GNO_VERSION: ${GNO_VERSION:-master}
                 GNO_REPO: ${GNO_REPO:-gnolang/gno}
         image: gno-validator-gnoland
-        command: >
-            gnoland start
-            --skip-genesis-sig-verification
-            -data-dir /gnoland-data
-            -genesis /genesis.json
+        environment:
+            GNOLAND_EARLY_START: ${GNOLAND_EARLY_START}
+        command:
+            - gnoland
+            - start
+            - --skip-genesis-sig-verification
+            - -data-dir
+            - /gnoland-data
+            - -genesis
+            - /genesis.json
         volumes:
             - ./gnoland-data:/gnoland-data
             - ./genesis.json:/genesis.json:ro
