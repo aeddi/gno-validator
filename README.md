@@ -2,6 +2,7 @@
 
 Docker Compose setup for a `gnoland` validator node with `gnokms` remote signing.
 Both services are built from source (`gnolang/gno`).
+Additionally, OpenTelemetry is set up to collect traces from `gnoland` and visualize them in Grafana, with Tempo as the backend.
 
 ## Prerequisites
 

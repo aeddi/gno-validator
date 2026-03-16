@@ -39,11 +39,12 @@ gen-identity: ## Generate the validator signing identity in the gnokms keystore
 	fi
 
 print-identity: ## Print the validator identity (address and public key) from the keystore
-	docker run --rm \
+	@docker run --rm \
 		--entrypoint gnokey \
 		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 		gno-validator-gnokms \
-		list --home /gnokms-data/keystore
+		list --home /gnokms-data/keystore \
+	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "address: " addr "\npub_key: " pub}'
 
 build: ## Build Docker images
 	docker compose build
