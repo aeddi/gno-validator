@@ -1,0 +1,17 @@
+# gnoland node config overrides.
+# Each entry is applied to gnoland-data/config/config.toml via 'gnoland config set'
+# on every container start, before mandatory settings (consensus remote signer, telemetry).
+# Format: key = value (one per line; # for comments; blank lines ignored)
+
+# ---- Required node settings
+moniker = "anon-val-01"
+p2p.external_address = "<public-ip-or-domain>:26656"
+p2p.seeds = "<node-id>@<host>:26656,..."
+p2p.persistent_peers = "<node-id>@<host>:26656,..."
+
+# ---- Recommended settings for a validator node
+consensus.peer_gossip_sleep_duration = "10ms"
+consensus.timeout_commit = "3s"
+mempool.size = 10000
+p2p.flush_throttle_timeout = "10ms"
+p2p.max_num_outbound_peers = 40

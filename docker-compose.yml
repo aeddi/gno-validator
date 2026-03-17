@@ -42,6 +42,7 @@ services:
         volumes:
             - ./gnoland-data:/gnoland-data
             - ./genesis.json:/genesis.json:ro
+            - ./config.overrides:/config.overrides:ro
             - gnokms-sock:/sock
         ports:
             - '${GNOLAND_RPC_PORT:-26657}:26657'

@@ -55,16 +55,24 @@ Builds images and initializes `gnoland-data/config/config.toml` and `gnoland-dat
 
 > **Warning:** Only run `make init` once. Re-running it on an existing node will overwrite your config and secrets.
 
-### 5. Edit the node config
+### 5. Configure the node
 
 ```sh
-$EDITOR gnoland-data/config/config.toml
+cp config.overrides.example config.overrides
+$EDITOR config.overrides
 ```
 
-Required fields to update:
+Set the required fields:
 
 - `moniker` — human-readable node name
 - `p2p.external_address` — your public P2P address, e.g. `tcp://<your-ip>:26656`
+- `p2p.seeds` — comma-separated seed nodes for initial peer discovery
+- `p2p.persistent_peers` — comma-separated peers to maintain persistent connections to
+
+Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` via
+`gnoland config set` on every container start. Mandatory settings (remote signer, telemetry)
+are applied after and override any conflicting entries. `config.overrides` is gitignored — it
+stays local to each operator.
 
 ### 6. Start
 
@@ -95,7 +103,7 @@ No login required — anonymous access is enabled with Admin role.
 | `make update`         | Rebuild images and restart (binary update)                          |
 | `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |
 
-> After editing `gnoland-data/config/config.toml`: run `make down && make up` to apply changes.
+> After editing `config.overrides`: run `make down && make up` to apply changes.
 
 ## Architecture
 

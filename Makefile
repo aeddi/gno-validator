@@ -7,17 +7,17 @@ SHELL := /bin/bash
 
 init: .check-env build ## First-time setup: build images, init node config/secrets
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
-	docker compose run --rm gnoland gnoland config init \
+	docker compose run --rm gnoland gnoland config init -force \
 		-config-path /gnoland-data/config/config.toml
-	docker compose run --rm gnoland gnoland secrets init \
+	docker compose run --rm gnoland gnoland secrets init -force \
 		-data-dir /gnoland-data/secrets
 	@echo ""
 	@echo "Init complete. Before running 'make up':"
-	@echo "  1. Edit gnoland-data/config/config.toml — set moniker and p2p.external_address"
+	@echo "  1. cp config.overrides.example config.overrides — set moniker, p2p.external_address, p2p.seeds, p2p.persistent_peers"
 	@echo "  2. Copy genesis.json to the repo root"
 	@echo ""
-	@echo "  Note: consensus remote signer and telemetry settings are applied automatically on"
-	@echo "        each start — manual edits to those keys in config.toml will be overwritten."
+	@echo "  Note: config.overrides is applied on each start. Mandatory settings (remote signer,"
+	@echo "        telemetry) are applied after and will override any conflicting entries."
 
 gen-identity: ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
