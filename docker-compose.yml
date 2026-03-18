@@ -57,7 +57,7 @@ services:
             driver: json-file
             options:
                 max-size: '1g'
-                max-file: '30'
+                max-file: '${GNOLAND_LOG_SIZE:-30}'
 
     otelcol:
         image: otel/opentelemetry-collector-contrib:latest

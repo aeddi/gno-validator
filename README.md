@@ -25,6 +25,7 @@ Edit `.env` and set:
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
 - `GRAFANA_PORT` — host port for the Grafana web UI (default: `3000`)
+- `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `30`, i.e. 30 GB total)
 
 ### 2. Generate the signing identity
 
@@ -127,6 +128,6 @@ If the password is written to `.env`, an attacker who dumps the disk (via snapsh
 
 ## Logging
 
-- gnoland: up to 30 GB (30 × 1 GB files, rotated)
+- gnoland: up to 30 GB by default (30 × 1 GB files, rotated), configurable via `GNOLAND_LOG_SIZE`
 - gnokms: up to 1 GB
 - otelcol, tempo, prometheus, grafana: up to 100 MB each
