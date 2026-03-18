@@ -10,7 +10,7 @@ processors:
 exporters:
   prometheus:
     endpoint: 0.0.0.0:8889
-  otlphttp/tempo:
+  otlp_http/tempo:
     endpoint: http://tempo:4318
 
 extensions:
@@ -27,4 +27,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlphttp/tempo]
+      exporters: [otlp_http/tempo]
