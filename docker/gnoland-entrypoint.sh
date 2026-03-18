@@ -11,23 +11,7 @@ if [ "$2" = "start" ]; then
   fi
 
   # ---- Apply user config overrides
-  OVERRIDES="/config.overrides"
-  if [ -f "$OVERRIDES" ]; then
-    while IFS= read -r line; do
-      case "$line" in
-      '' | '#'*) continue ;;
-      esac
-      key="${line%%=*}"
-      value="${line#*=}"
-      key="${key#"${key%%[! ]*}"}"
-      key="${key%"${key##*[! ]}"}"
-      value="${value#"${value%%[! ]*}"}"
-      value="${value%"${value##*[! ]}"}"
-      value="${value#\"}"
-      value="${value%\"}"
-      gnoland config set "$key" "$value" -config-path "$CONFIG" >/dev/null
-    done <"$OVERRIDES"
-  fi
+  /apply-overrides.sh "$CONFIG"
 
   # ---- Apply required config overrides
   gnoland config set p2p.laddr tcp://127.0.0.1:26656 \

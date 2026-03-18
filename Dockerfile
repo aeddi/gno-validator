@@ -27,7 +27,8 @@ COPY    --from=builder /gnoroot/gnovm/stdlibs /gnoroot/gnovm/stdlibs
 COPY    --from=builder /gnoroot/gnovm/tests/stdlibs /gnoroot/gnovm/tests/stdlibs
 
 COPY    docker/gnoland-entrypoint.sh /entrypoint.sh
-RUN     chmod +x /entrypoint.sh
+COPY    docker/apply-overrides.sh /apply-overrides.sh
+RUN     chmod +x /entrypoint.sh /apply-overrides.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 

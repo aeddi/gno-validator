@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init gen-identity print-identity build up down restart logs logs-gnoland logs-gnokms status update reset .check-env
+.PHONY: init gen-identity print-identity build up down restart logs logs-gnoland logs-gnokms status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
@@ -19,7 +19,22 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@echo "  Note: config.overrides is applied on each start. Mandatory settings (remote signer,"
 	@echo "        telemetry) are applied after and will override any conflicting entries."
 
-gen-identity: build ## Generate the validator signing identity in the gnokms keystore
+.ensure-gnokms:
+	@docker image inspect gno-validator-gnokms >/dev/null 2>&1 || \
+		(echo "Building gnokms image, please wait..." && docker compose build gnokms)
+
+.ensure-gnoland:
+	@docker image inspect gno-validator-gnoland >/dev/null 2>&1 || \
+		(echo "Building gnoland image, please wait..." && docker compose build gnoland)
+
+.init-node-data: .ensure-gnoland
+	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
+	@docker compose run --rm --no-deps gnoland gnoland config init \
+		-config-path /gnoland-data/config/config.toml &>/dev/null || true
+	@docker compose run --rm --no-deps gnoland gnoland secrets init \
+		-data-dir /gnoland-data/secrets &>/dev/null || true
+
+gen-identity: .ensure-gnokms ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
 	@if grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
 		echo "Note: using GNOKMS_PASSWORD from .env (password not shown)"; \
@@ -38,13 +53,30 @@ gen-identity: build ## Generate the validator signing identity in the gnokms key
 			add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
-print-identity: build ## Print the validator identity (address and public key) from the keystore
+print-identity: .ensure-gnokms .ensure-gnoland .init-node-data ## Print the validator identity (address and public key) from the keystore
 	@docker run --rm \
 		--entrypoint gnokey \
 		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 		gno-validator-gnokms \
 		list --home /gnokms-data/keystore \
-	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "address: " addr "\npub_key: " pub}'
+	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator_address: " addr "\nvalidator_pub_key: " pub}'
+	@if [ -f config.overrides ]; then \
+		docker run --rm \
+			--entrypoint /apply-overrides.sh \
+			-v "$(CURDIR)/gnoland-data:/gnoland-data" \
+			-v "$(CURDIR)/config.overrides:/config.overrides:ro" \
+			gno-validator-gnoland; \
+	fi
+	@echo "node_id:           $$(docker run --rm \
+		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
+		gno-validator-gnoland \
+		gnoland secrets get node_id.id --raw \
+		-data-dir /gnoland-data/secrets)"
+	@echo "moniker:           $$(docker run --rm \
+		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
+		gno-validator-gnoland \
+		gnoland config get moniker --raw \
+		-config-path /gnoland-data/config/config.toml)"
 
 build: ## Build Docker images
 	docker compose build
@@ -78,8 +110,9 @@ status: ## Show container status
 reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
 	@echo "WARNING: This will erase the node state. Ensure the node is stopped ('make down') first."
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
-	rm -rf gnoland-data/db gnoland-data/wal
-	printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' > gnoland-data/secrets/priv_validator_state.json
+	@echo "Resetting gnoland-data/db, gnoland-data/wal and gnoland-data/secrets/priv_validator_state.json"
+	@rm -rf gnoland-data/db gnoland-data/wal
+	@printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' > gnoland-data/secrets/priv_validator_state.json
 
 update: .check-env build ## Rebuild images and restart (binary update)
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
