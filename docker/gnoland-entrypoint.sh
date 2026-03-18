@@ -14,9 +14,9 @@ if [ "$2" = "start" ]; then
   /apply-overrides.sh "$CONFIG"
 
   # ---- Apply required config overrides
-  gnoland config set p2p.laddr tcp://127.0.0.1:26656 \
+  gnoland config set p2p.laddr tcp://0.0.0.0:26656 \
     -config-path "$CONFIG" >/dev/null
-  gnoland config set rpc.laddr tcp://127.0.0.1:26657 \
+  gnoland config set rpc.laddr tcp://0.0.0.0:26657 \
     -config-path "$CONFIG" >/dev/null
   gnoland config set consensus.priv_validator.remote_signer.server_address unix:///sock/gnokms.sock \
     -config-path "$CONFIG" >/dev/null
