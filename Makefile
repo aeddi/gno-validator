@@ -19,7 +19,7 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@echo "  Note: config.overrides is applied on each start. Mandatory settings (remote signer,"
 	@echo "        telemetry) are applied after and will override any conflicting entries."
 
-gen-identity: ## Generate the validator signing identity in the gnokms keystore
+gen-identity: build ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
 	@if grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
 		echo "Note: using GNOKMS_PASSWORD from .env (password not shown)"; \
@@ -38,7 +38,7 @@ gen-identity: ## Generate the validator signing identity in the gnokms keystore
 			add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
-print-identity: ## Print the validator identity (address and public key) from the keystore
+print-identity: build ## Print the validator identity (address and public key) from the keystore
 	@docker run --rm \
 		--entrypoint gnokey \
 		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
