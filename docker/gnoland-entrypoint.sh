@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# ---- Sync system clock via NTP at startup
+ntpd -nq -p pool.ntp.org || printf "Warning: NTP sync failed, continuing with current clock\n" >&2
+
 CONFIG="/gnoland-data/config/config.toml"
 
 # ---- Config setup only applies when starting the node

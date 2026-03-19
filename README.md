@@ -108,7 +108,7 @@ No login required — anonymous access is enabled with Admin role.
 
 ## Architecture
 
-- **gnoland** exposes RPC (`GNOLAND_RPC_PORT`, default `26657`) and P2P (`GNOLAND_P2P_PORT`, default `26656`) to the host.
+- **gnoland** exposes RPC (`GNOLAND_RPC_PORT`, default `26657`) and P2P (`GNOLAND_P2P_PORT`, default `26656`) to the host. On startup, the container syncs the system clock via NTP before launching gnoland, ensuring accurate timing when waiting for `genesis_time` to elapse.
 - **gnokms** communicates with gnoland over a Unix socket — no network port is exposed.
 - **otelcol** receives traces from gnoland and forwards them to tempo.
 - **tempo** stores distributed traces.

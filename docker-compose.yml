@@ -52,6 +52,8 @@ services:
                 condition: service_started
             otelcol:
                 condition: service_started
+        cap_add:
+            - SYS_TIME
         restart: unless-stopped
         logging:
             driver: json-file
