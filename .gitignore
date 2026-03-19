@@ -10,3 +10,6 @@ genesis.json
 # Node data — contains secrets and chain state
 gnoland-data/
 gnokms-data/
+
+# Downloaded tools — fetched on demand, not tracked
+.tools/
