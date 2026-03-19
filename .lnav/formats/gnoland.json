@@ -1,0 +1,37 @@
+{
+    "$schema": "https://lnav.org/schemas/format-v1.schema.json",
+    "gnoland_log": {
+        "title": "Gnoland Node Log",
+        "description": "Structured JSON logs from the gnoland blockchain node (Uber Zap format)",
+        "json": true,
+        "timestamp-field": "ts",
+        "timestamp-format": ["%s"],
+        "level-field": "level",
+        "body-field": "msg",
+        "level": {
+            "error":    "error",
+            "warning":  "warn",
+            "info":     "info",
+            "debug":    "debug",
+            "fatal":    "fatal",
+            "critical": ["dpanic", "panic"]
+        },
+        "line-format": [
+            { "field": "__timestamp__" },
+            "  ",
+            { "field": "level",  "min-width": 5, "align": "left" },
+            "  ",
+            { "field": "module", "min-width": 15, "align": "left", "default-value": "" },
+            " ",
+            { "field": "msg" }
+        ],
+        "sample": [
+            {
+                "line": "{\"level\":\"debug\",\"ts\":1773950605.069,\"msg\":\"Consensus ticker\",\"module\":\"blockchain\",\"numPending\":0,\"total\":0}"
+            },
+            {
+                "line": "{\"level\":\"info\",\"ts\":1773940651.25,\"msg\":\"Starting multi\",\"module\":\"proxy\",\"impl\":\"multi\"}"
+            }
+        ]
+    }
+}

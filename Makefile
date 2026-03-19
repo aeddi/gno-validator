@@ -36,9 +36,9 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 	@docker compose run --rm --no-deps gnoland gnoland secrets init \
 		-data-dir /gnoland-data/secrets &>/dev/null || true
 
-.tools/lnav:
-	@rm -f .tools/lnav.zip; rm -rf .tools/lnav-$(LNAV_VERSION); \
-	mkdir -p .tools; \
+.lnav/bin/lnav:
+	@rm -f .lnav/bin/lnav.zip; rm -rf .lnav/bin/lnav-$(LNAV_VERSION); \
+	mkdir -p .lnav/bin; \
 	if command -v curl >/dev/null 2>&1; then FETCH="curl -fsSL -o"; \
 	elif command -v wget >/dev/null 2>&1; then FETCH="wget -q -O"; \
 	else echo "Error: curl or wget is required to download lnav" >&2; exit 1; fi; \
@@ -52,12 +52,12 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 		*)             echo "Error: unsupported platform $$OS/$$ARCH" >&2; exit 1 ;; \
 	esac; \
 	echo "Downloading lnav v$(LNAV_VERSION)..."; \
-	$$FETCH .tools/lnav.zip "https://github.com/tstack/lnav/releases/download/v$(LNAV_VERSION)/$$ZIP" && \
-	unzip -q .tools/lnav.zip "lnav-$(LNAV_VERSION)/lnav" -d .tools && \
-	mv .tools/lnav-$(LNAV_VERSION)/lnav .tools/lnav && \
-	rm -rf .tools/lnav.zip .tools/lnav-$(LNAV_VERSION) && \
-	chmod +x .tools/lnav && \
-	echo "lnav installed at .tools/lnav"
+	$$FETCH .lnav/bin/lnav.zip "https://github.com/tstack/lnav/releases/download/v$(LNAV_VERSION)/$$ZIP" && \
+	unzip -q .lnav/bin/lnav.zip "lnav-$(LNAV_VERSION)/lnav" -d .lnav/bin && \
+	mv .lnav/bin/lnav-$(LNAV_VERSION)/lnav .lnav/bin/lnav && \
+	rm -rf .lnav/bin/lnav.zip .lnav/bin/lnav-$(LNAV_VERSION) && \
+	chmod +x .lnav/bin/lnav && \
+	echo "lnav installed at .lnav/bin/lnav"
 
 gen-identity: .ensure-gnokms ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
@@ -121,8 +121,8 @@ restart: ## Restart all services (does not re-read compose file; use 'make down 
 	docker compose restart
 
 logs-gnoland: ## Open interactive log TUI (level filter + search) — downloads lnav on first run
-	@if $(MAKE) -s .tools/lnav; then \
-		docker compose logs -f --no-log-prefix gnoland | .tools/lnav -t; \
+	@if $(MAKE) -s .lnav/bin/lnav; then \
+		docker compose logs -f --no-log-prefix gnoland | .lnav/bin/lnav -t -I ./.lnav; \
 	else \
 		echo "lnav unavailable, falling back to plain logs..."; \
 		docker compose logs -f gnoland; \

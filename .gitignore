@@ -11,5 +11,5 @@ genesis.json
 gnoland-data/
 gnokms-data/
 
-# Downloaded tools — fetched on demand, not tracked
-.tools/
+# Downloaded lnav binary — fetched on demand, not tracked
+.lnav/bin/
