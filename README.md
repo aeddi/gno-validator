@@ -94,9 +94,9 @@ No login required — anonymous access is enabled with Admin role.
 | `make up`             | Start all services                                                  |
 | `make down`           | Stop and remove containers                                          |
 | `make restart`        | Quick restart (does not reload compose file)                        |
-| `make logs`           | Follow all service logs                                             |
-| `make logs-gnoland`   | Follow gnoland logs                                                 |
-| `make logs-gnokms`    | Follow gnokms logs                                                  |
+| `make logs-gnoland`   | Open interactive log TUI (level filter + search) — downloads lnav on first run |
+| `make logs-gnokms`    | Follow gnokms logs                                                              |
+| `make logs-telemetry` | Follow logs for all telemetry services                                          |
 | `make status`         | Show container status                                               |
 | `make gen-identity`   | Generate the validator signing identity                             |
 | `make print-identity` | Print the validator address and public key                          |
