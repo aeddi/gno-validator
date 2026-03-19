@@ -21,12 +21,35 @@
                 "identifier": true
             }
         },
+        "highlights": {
+            "level-debug": {
+                "pattern": "\\bDEBUG\\b",
+                "color": "#6272a4"
+            },
+            "level-info": {
+                "pattern": "\\bINFO\\b",
+                "color": "#50fa7b"
+            },
+            "level-warn": {
+                "pattern": "\\bWARN\\b",
+                "color": "#ffb86c"
+            },
+            "level-error": {
+                "pattern": "\\bERROR\\b",
+                "color": "#ff5555"
+            },
+            "level-fatal": {
+                "pattern": "\\bFATAL\\b",
+                "color": "#ff5555",
+                "underline": true
+            }
+        },
         "line-format": [
             { "field": "__timestamp__" },
             "  ",
-            { "field": "level",  "min-width": 5, "align": "left" },
+            { "field": "level",  "min-width": 5, "align": "left", "text-transform": "uppercase" },
             "  ",
-            { "field": "module", "min-width": 15, "align": "left", "default-value": "" },
+            { "field": "module", "min-width": 20, "align": "left", "default-value": "" },
             " ",
             { "field": "msg" }
         ],
