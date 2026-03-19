@@ -35,6 +35,8 @@ services:
             - gnoland
             - start
             - --skip-genesis-sig-verification
+            - -log-format
+            - json
             - -data-dir
             - /gnoland-data
             - -genesis
