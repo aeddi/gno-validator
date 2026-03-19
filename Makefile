@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
-.PHONY: init gen-identity print-identity build up down restart logs logs-gnoland logs-gnokms status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
+LNAV_VERSION := 0.13.2
+
+.PHONY: init gen-identity print-identity build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
@@ -33,6 +35,29 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 		-config-path /gnoland-data/config/config.toml &>/dev/null || true
 	@docker compose run --rm --no-deps gnoland gnoland secrets init \
 		-data-dir /gnoland-data/secrets &>/dev/null || true
+
+.tools/lnav:
+	@rm -f .tools/lnav.zip; rm -rf .tools/lnav-$(LNAV_VERSION); \
+	mkdir -p .tools; \
+	if command -v curl >/dev/null 2>&1; then FETCH="curl -fsSL -o"; \
+	elif command -v wget >/dev/null 2>&1; then FETCH="wget -q -O"; \
+	else echo "Error: curl or wget is required to download lnav" >&2; exit 1; fi; \
+	if ! command -v unzip >/dev/null 2>&1; then echo "Error: unzip is required to extract lnav" >&2; exit 1; fi; \
+	OS=$$(uname -s); ARCH=$$(uname -m); \
+	case "$$OS/$$ARCH" in \
+		Darwin/arm64)  ZIP=lnav-$(LNAV_VERSION)-aarch64-macos.zip ;; \
+		Darwin/*)      ZIP=lnav-$(LNAV_VERSION)-x86_64-macos.zip ;; \
+		Linux/aarch64) ZIP=lnav-$(LNAV_VERSION)-linux-musl-arm64.zip ;; \
+		Linux/*)       ZIP=lnav-$(LNAV_VERSION)-linux-musl-x86_64.zip ;; \
+		*)             echo "Error: unsupported platform $$OS/$$ARCH" >&2; exit 1 ;; \
+	esac; \
+	echo "Downloading lnav v$(LNAV_VERSION)..."; \
+	$$FETCH .tools/lnav.zip "https://github.com/tstack/lnav/releases/download/v$(LNAV_VERSION)/$$ZIP" && \
+	unzip -q .tools/lnav.zip "lnav-$(LNAV_VERSION)/lnav" -d .tools && \
+	mv .tools/lnav-$(LNAV_VERSION)/lnav .tools/lnav && \
+	rm -rf .tools/lnav.zip .tools/lnav-$(LNAV_VERSION) && \
+	chmod +x .tools/lnav && \
+	echo "lnav installed at .tools/lnav"
 
 gen-identity: .ensure-gnokms ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
@@ -95,14 +120,19 @@ down: ## Stop and remove containers
 restart: ## Restart all services (does not re-read compose file; use 'make down && make up' after config changes)
 	docker compose restart
 
-logs: ## Follow logs for all services
-	docker compose logs -f
-
-logs-gnoland: ## Follow gnoland logs
-	docker compose logs -f gnoland
+logs-gnoland: ## Open interactive log TUI (level filter + search) — downloads lnav on first run
+	@if $(MAKE) -s .tools/lnav; then \
+		docker compose logs -f --no-log-prefix gnoland | .tools/lnav -t -N; \
+	else \
+		echo "lnav unavailable, falling back to plain logs..."; \
+		docker compose logs -f gnoland; \
+	fi
 
 logs-gnokms: ## Follow gnokms logs
 	docker compose logs -f gnokms
+
+logs-telemetry: ## Follow logs for all telemetry services
+	docker compose logs -f otelcol tempo prometheus grafana
 
 status: ## Show container status
 	docker compose ps
