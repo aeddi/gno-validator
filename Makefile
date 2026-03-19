@@ -122,7 +122,7 @@ restart: ## Restart all services (does not re-read compose file; use 'make down 
 
 logs-gnoland: ## Open interactive log TUI (level filter + search) — downloads lnav on first run
 	@if $(MAKE) -s .tools/lnav; then \
-		docker compose logs -f --no-log-prefix gnoland | .tools/lnav -t -N; \
+		docker compose logs -f --no-log-prefix gnoland | .tools/lnav -t; \
 	else \
 		echo "lnav unavailable, falling back to plain logs..."; \
 		docker compose logs -f gnoland; \
