@@ -60,13 +60,21 @@ services:
         logging:
             driver: json-file
             options:
-                max-size: '1g'
-                max-file: '${GNOLAND_LOG_SIZE:-30}'
+                max-size: '100m'
+                max-file: '${GNOLAND_LOG_SIZE:-3}'
 
     otelcol:
         image: otel/opentelemetry-collector-contrib:0.147.0
+        user: "0"
         volumes:
             - ./telemetry/otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - /:/hostfs:ro
+        environment:
+            - HOST_PROC=/hostfs/proc
+            - HOST_SYS=/hostfs/sys
+            - HOST_FS=/hostfs
+        pid: host
         depends_on:
             tempo:
                 condition: service_started
@@ -82,6 +90,10 @@ services:
         command: ['-config.file=/etc/tempo.yaml']
         volumes:
             - ./telemetry/tempo.yml:/etc/tempo.yaml:ro
+        deploy:
+            resources:
+                limits:
+                    memory: 512M
         restart: unless-stopped
         logging:
             driver: json-file
