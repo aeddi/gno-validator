@@ -104,7 +104,7 @@ print-identity: .ensure-gnokms .ensure-gnoland .init-node-data ## Print the vali
 		-config-path /gnoland-data/config/config.toml)"
 
 build: ## Build Docker images
-	docker compose build
+	docker compose build --no-cache
 
 up: .check-env ## Start all services
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
