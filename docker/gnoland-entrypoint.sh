@@ -1,7 +1,9 @@
 #!/bin/sh
 
 # ---- Sync system clock via NTP at startup
-ntpd -nq -p pool.ntp.org || printf "Warning: NTP sync failed, continuing with current clock\n" >&2
+if [ -n "$GNOLAND_NTP_UPDATE" ]; then
+  ntpd -nq -p pool.ntp.org || printf "Warning: NTP sync failed, continuing with current clock\n" >&2
+fi
 
 CONFIG="/gnoland-data/config/config.toml"
 
