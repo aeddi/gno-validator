@@ -3,10 +3,12 @@ FROM    golang:1.24-alpine AS builder
 ENV     GNOROOT="/gnoroot"
 ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
+# GNO_COMMIT_HASH pins the exact commit; changing it busts the cache for all downstream layers
+ARG     GNO_COMMIT_HASH
 
 RUN     apk add --no-cache git ca-certificates
-RUN     git clone https://github.com/${GNO_REPO}.git /gnoroot
-RUN     git -C /gnoroot checkout ${GNO_VERSION}
+RUN     git clone https://github.com/${GNO_REPO}.git /gnoroot && \
+        git -C /gnoroot checkout ${GNO_COMMIT_HASH:-${GNO_VERSION}}
 
 WORKDIR /gnoroot
 
@@ -17,6 +19,14 @@ RUN     go build -o /usr/local/bin/gnokey ./gno.land/cmd/gnokey
 # ----- gnoland final stage
 FROM    alpine:3 AS gnoland
 ENV     GNOROOT="/gnoroot"
+ARG     GNO_COMMIT_HASH
+ARG     GNO_VERSION=master
+ARG     GNO_REPO=gnolang/gno
+ARG     BUILD_DATE
+LABEL   gno.commit="${GNO_COMMIT_HASH}" \
+        gno.version="${GNO_VERSION}" \
+        gno.repo="${GNO_REPO}" \
+        build.date="${BUILD_DATE}"
 
 RUN     apk add --no-cache ca-certificates
 
@@ -34,6 +44,14 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 # ----- gnokms final stage
 FROM    alpine:3 AS gnokms
+ARG     GNO_COMMIT_HASH
+ARG     GNO_VERSION=master
+ARG     GNO_REPO=gnolang/gno
+ARG     BUILD_DATE
+LABEL   gno.commit="${GNO_COMMIT_HASH}" \
+        gno.version="${GNO_VERSION}" \
+        gno.repo="${GNO_REPO}" \
+        build.date="${BUILD_DATE}"
 
 RUN     apk add --no-cache ca-certificates
 

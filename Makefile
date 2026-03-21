@@ -4,7 +4,7 @@ LNAV_VERSION := 0.13.2
 HOST_UID     := $(shell id -u)
 HOST_GID     := $(shell id -g)
 
-.PHONY: init gen-identity print-identity build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
+.PHONY: init gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
@@ -82,13 +82,7 @@ gen-identity: .ensure-gnokms ## Generate the validator signing identity in the g
 			add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
-print-identity: .ensure-gnokms .ensure-gnoland .init-node-data ## Print the validator identity (address and public key) from the keystore
-	@docker run --rm \
-		--entrypoint gnokey \
-		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
-		gno-validator-gnokms \
-		list --home /gnokms-data/keystore \
-	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator_address: " addr "\nvalidator_pub_key: " pub}'
+print-infos: .ensure-gnoland .ensure-gnokms .init-node-data ## Print node identity, network config, build metadata, and SHA-256 checksums
 	@if [ -f config.overrides ]; then \
 		docker run --rm \
 			--entrypoint /apply-overrides.sh \
@@ -96,19 +90,83 @@ print-identity: .ensure-gnokms .ensure-gnoland .init-node-data ## Print the vali
 			-v "$(CURDIR)/config.overrides:/config.overrides:ro" \
 			gno-validator-gnoland; \
 	fi
+	@echo "=== Identity ==="
+	@docker run --rm \
+		--entrypoint gnokey \
+		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
+		gno-validator-gnokms \
+		list --home /gnokms-data/keystore \
+	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator address: " addr "\nvalidator pub_key: " pub}'
 	@echo "node_id:           $$(docker run --rm \
+		-e GNOLAND_NTP_UPDATE= \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
 		gno-validator-gnoland \
 		gnoland secrets get node_id.id --raw \
 		-data-dir /gnoland-data/secrets)"
 	@echo "moniker:           $$(docker run --rm \
+		-e GNOLAND_NTP_UPDATE= \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
 		gno-validator-gnoland \
 		gnoland config get moniker --raw \
 		-config-path /gnoland-data/config/config.toml)"
+	@echo ""
+	@echo "=== Network Configuration ==="
+	@echo "seeds:             $$(docker run --rm \
+		-e GNOLAND_NTP_UPDATE= \
+		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
+		gno-validator-gnoland \
+		gnoland config get p2p.seeds --raw \
+		-config-path /gnoland-data/config/config.toml)"
+	@echo "persistent peers:  $$(docker run --rm \
+		-e GNOLAND_NTP_UPDATE= \
+		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
+		gno-validator-gnoland \
+		gnoland config get p2p.persistent_peers --raw \
+		-config-path /gnoland-data/config/config.toml)"
+	@P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	P2P_PORT=$${P2P_PORT:-26656}; \
+	echo "p2p listener:      tcp://0.0.0.0:$$P2P_PORT"
+	@RPC_PORT=$$(grep -E '^GNOLAND_RPC_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	RPC_PORT=$${RPC_PORT:-26657}; \
+	echo "rpc listener:      tcp://0.0.0.0:$$RPC_PORT"
+	@echo ""
+	@echo "=== Build Information ==="
+	@echo "gno commit:        $$(docker inspect --format '{{index .Config.Labels "gno.commit"}}' gno-validator-gnoland 2>/dev/null)"
+	@echo "gno version:       $$(docker inspect --format '{{index .Config.Labels "gno.version"}}' gno-validator-gnoland 2>/dev/null)"
+	@echo "gno repo:          $$(docker inspect --format '{{index .Config.Labels "gno.repo"}}' gno-validator-gnoland 2>/dev/null)"
+	@echo "build date:        $$(docker inspect --format '{{index .Config.Labels "build.date"}}' gno-validator-gnoland 2>/dev/null)"
+	@echo ""
+	@echo "=== Binary Checksums (SHA-256) ==="
+	@echo "gnoland:           $$(docker run --rm --entrypoint sha256sum gno-validator-gnoland /usr/local/bin/gnoland | awk '{print $$1}')"
+	@echo "gnokey:            $$(docker run --rm --entrypoint sha256sum gno-validator-gnokms /usr/local/bin/gnokey | awk '{print $$1}')"
+	@echo "gnokms:            $$(docker run --rm --entrypoint sha256sum gno-validator-gnokms /usr/local/bin/gnokms | awk '{print $$1}')"
+	@echo ""
+	@echo "=== File Checksums (SHA-256) ==="
+	@if [ -f genesis.json ]; then \
+		if command -v sha256sum >/dev/null 2>&1; then \
+			echo "genesis.json:      $$(sha256sum genesis.json | awk '{print $$1}')"; \
+		else \
+			echo "genesis.json:      $$(shasum -a 256 genesis.json | awk '{print $$1}')"; \
+		fi; \
+	else \
+		echo "genesis.json:      (not found)"; \
+	fi
 
-build: ## Build Docker images
-	docker compose build --no-cache
+build: ## Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
+	@GNO_REPO=$$(grep -E '^GNO_REPO=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	GNO_REPO=$${GNO_REPO:-gnolang/gno}; \
+	GNO_VERSION=$$(grep -E '^GNO_VERSION=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	GNO_VERSION=$${GNO_VERSION:-master}; \
+	echo "Resolving commit hash for $${GNO_VERSION} on $${GNO_REPO}..."; \
+	GNO_COMMIT=$$(git ls-remote https://github.com/$${GNO_REPO}.git $${GNO_VERSION} 2>/dev/null | awk '{print $$1}'); \
+	if [ -z "$$GNO_COMMIT" ]; then \
+		echo "Warning: could not resolve $${GNO_VERSION} to a commit hash (no network or direct commit?), cache may be stale"; \
+		GNO_COMMIT=$$GNO_VERSION; \
+	fi; \
+	echo "Building gno@$${GNO_COMMIT:0:12} ($${GNO_VERSION} on $${GNO_REPO})"; \
+	export GNO_COMMIT_HASH=$$GNO_COMMIT; \
+	export BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	docker compose build
 
 up: .check-env ## Start all services
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \

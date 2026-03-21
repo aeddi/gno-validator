@@ -8,6 +8,8 @@ services:
             args:
                 GNO_VERSION: ${GNO_VERSION:-master}
                 GNO_REPO: ${GNO_REPO:-gnolang/gno}
+                GNO_COMMIT_HASH: ${GNO_COMMIT_HASH:-}
+                BUILD_DATE: ${BUILD_DATE:-}
         image: gno-validator-gnokms
         environment:
             GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
@@ -28,6 +30,8 @@ services:
             args:
                 GNO_VERSION: ${GNO_VERSION:-master}
                 GNO_REPO: ${GNO_REPO:-gnolang/gno}
+                GNO_COMMIT_HASH: ${GNO_COMMIT_HASH:-}
+                BUILD_DATE: ${BUILD_DATE:-}
         image: gno-validator-gnoland
         environment:
             GNOLAND_EARLY_START: ${GNOLAND_EARLY_START}
