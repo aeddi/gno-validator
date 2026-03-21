@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
 LNAV_VERSION := 0.13.2
+HOST_UID     := $(shell id -u)
+HOST_GID     := $(shell id -g)
 
 .PHONY: init gen-identity print-identity build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
 
@@ -9,9 +11,9 @@ LNAV_VERSION := 0.13.2
 
 init: .check-env build ## First-time setup: build images, init node config/secrets
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
-	docker compose run --rm gnoland gnoland config init -force \
+	docker compose run --rm --user $(HOST_UID):$(HOST_GID) gnoland gnoland config init -force \
 		-config-path /gnoland-data/config/config.toml
-	docker compose run --rm gnoland gnoland secrets init -force \
+	docker compose run --rm --user $(HOST_UID):$(HOST_GID) gnoland gnoland secrets init -force \
 		-data-dir /gnoland-data/secrets
 	@echo ""
 	@echo "Init complete. Before running 'make up':"
@@ -31,9 +33,9 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 
 .init-node-data: .ensure-gnoland
 	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
-	@docker compose run --rm --no-deps gnoland gnoland config init \
+	@docker compose run --rm --no-deps --user $(HOST_UID):$(HOST_GID) gnoland gnoland config init \
 		-config-path /gnoland-data/config/config.toml &>/dev/null || true
-	@docker compose run --rm --no-deps gnoland gnoland secrets init \
+	@docker compose run --rm --no-deps --user $(HOST_UID):$(HOST_GID) gnoland gnoland secrets init \
 		-data-dir /gnoland-data/secrets &>/dev/null || true
 
 .lnav/bin/lnav:
@@ -66,12 +68,14 @@ gen-identity: .ensure-gnokms ## Generate the validator signing identity in the g
 		pass=$$(grep -E '^GNOKMS_PASSWORD=' .env | cut -d= -f2-) && \
 		printf '%s\n%s\n' "$$pass" "$$pass" | \
 		docker run --rm -i \
+			--user $(HOST_UID):$(HOST_GID) \
 			--entrypoint gnokey \
 			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 			gno-validator-gnokms \
 			add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin; \
 	else \
 		docker run --rm -it \
+			--user $(HOST_UID):$(HOST_GID) \
 			--entrypoint gnokey \
 			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
 			gno-validator-gnokms \
