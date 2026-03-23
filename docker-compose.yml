@@ -65,12 +65,12 @@ services:
         logging:
             driver: json-file
             options:
-                max-size: '100m'
+                max-size: '1g'
                 max-file: '${GNOLAND_LOG_SIZE:-3}'
 
     otelcol:
         image: otel/opentelemetry-collector-contrib:0.147.0
-        user: "0"
+        user: '0'
         volumes:
             - ./telemetry/otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
             - /var/run/docker.sock:/var/run/docker.sock:ro
