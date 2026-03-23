@@ -20,6 +20,10 @@ receivers:
       com.docker.compose.service: container_service
 
 processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
   batch:
 
 exporters:
@@ -39,17 +43,17 @@ service:
   pipelines:
     metrics/app:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     metrics/host:
       receivers: [hostmetrics]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     metrics/docker:
       receivers: [docker_stats]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlp_http/tempo]

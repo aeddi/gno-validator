@@ -72,6 +72,11 @@ services:
             - HOST_PROC=/hostfs/proc
             - HOST_SYS=/hostfs/sys
             - HOST_FS=/hostfs
+            - GOMEMLIMIT=200MiB
+        deploy:
+            resources:
+                limits:
+                    memory: 256M
         pid: host
         depends_on:
             tempo:
