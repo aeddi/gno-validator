@@ -1,0 +1,54 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: Email Alerts
+    receivers:
+      - uid: email-receiver
+        type: email
+        settings:
+          addresses: ${GRAFANA_ALERT_EMAIL_ADDRESSES}
+          singleEmail: false
+
+policies:
+  - orgId: 1
+    receiver: Email Alerts
+
+groups:
+  - orgId: 1
+    name: Gno Block Height
+    folder: Gno
+    interval: 1m
+    rules:
+      - uid: gno-block-height-stall
+        title: Block Height Not Increasing
+        condition: A
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: 'No new block in the last ${GRAFANA_BLOCK_STALL_SECONDS}s (block count: {{ $values.B.Value | printf "%.0f" }})'
+          description: 'The gno node has not received a new block in the last ${GRAFANA_BLOCK_STALL_SECONDS} seconds. Total blocks processed: {{ $values.B.Value | printf "%.0f" }}.'
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: ${GRAFANA_BLOCK_STALL_SECONDS}
+              to: 0
+            model:
+              expr: 'increase(block_gas_price_hist_token_count[${GRAFANA_BLOCK_STALL_SECONDS}s]) == 0'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: 'block_gas_price_hist_token_count'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B

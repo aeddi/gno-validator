@@ -127,11 +127,23 @@ services:
 
     grafana:
         image: grafana/grafana:12.4.1
+        entrypoint: ['/entrypoint.sh']
         environment:
+            - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+            - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
             - GF_AUTH_ANONYMOUS_ENABLED=true
-            - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+            - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+            - GF_SMTP_ENABLED=${GRAFANA_SMTP_ENABLED:-false}
+            - GF_SMTP_HOST=${GRAFANA_SMTP_HOST:-}
+            - GF_SMTP_USER=${GRAFANA_SMTP_USER:-}
+            - GF_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD:-}
+            - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-}
+            - GF_SMTP_FROM_NAME=${GRAFANA_SMTP_FROM_NAME:-Grafana}
+            - GRAFANA_ALERT_EMAIL_ADDRESSES=${GRAFANA_ALERT_EMAIL_ADDRESSES:-}
+            - GRAFANA_BLOCK_STALL_SECONDS=${GRAFANA_BLOCK_STALL_SECONDS:-300}
         volumes:
             - grafana_data:/var/lib/grafana
+            - ./telemetry/grafana/entrypoint.sh:/entrypoint.sh:ro
             - ./telemetry/grafana/provisioning:/etc/grafana/provisioning:ro
         ports:
             - '${GRAFANA_PORT:-3000}:3000'

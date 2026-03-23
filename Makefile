@@ -170,11 +170,12 @@ build: ## Build Docker images (uses cache; rebuilds automatically when a new com
 
 up: .check-env ## Start all services
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GNOKMS_PASSWORD: " pass && echo "" && \
-		GNOKMS_PASSWORD="$$pass" docker compose up -d; \
-	else \
-		docker compose up -d; \
-	fi
+		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
+	fi; \
+	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
+	fi; \
+	docker compose up -d
 
 down: ## Stop and remove containers
 	docker compose down
@@ -208,8 +209,9 @@ reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
 
 update: .check-env build ## Rebuild images and restart (binary update)
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GNOKMS_PASSWORD: " pass && echo "" && \
-		GNOKMS_PASSWORD="$$pass" docker compose up -d; \
-	else \
-		docker compose up -d; \
-	fi
+		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
+	fi; \
+	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
+	fi; \
+	docker compose up -d
