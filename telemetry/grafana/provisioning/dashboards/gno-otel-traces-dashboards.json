@@ -1,131 +1,169 @@
 {
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
+  "annotations": { "list": [] },
+  "description": "Gno node distributed traces via Tempo",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 2,
+  "graphTooltip": 1,
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "tempo",
-        "uid": "tempo"
-      },
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
+      "title": "Trace Search",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "tempo", "uid": "tempo" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
+          "color": { "mode": "thresholds" },
           "custom": {
             "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
+            "cellOptions": { "type": "auto" },
             "inspect": false
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 80 }
+          ]}
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 19,
-        "w": 23,
-        "x": 0,
-        "y": 0
-      },
-      "id": 3,
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 1 },
+      "id": 2,
       "options": {
         "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
         "showHeader": true
       },
       "pluginVersion": "11.5.2",
       "targets": [
         {
-          "datasource": {
-            "type": "tempo",
-            "uid": "tempo"
-          },
+          "datasource": { "type": "tempo", "uid": "tempo" },
           "filters": [
-            {
-              "id": "fa42c486",
-              "operator": "=",
-              "scope": "span"
-            }
+            { "id": "fa42c486", "operator": "=", "scope": "span" }
           ],
-          "limit": 20,
+          "limit": 30,
           "query": "{name=~\"NewHeight: .*${height}.*\"}",
           "queryType": "traceql",
           "refId": "A",
           "tableType": "traces"
         }
       ],
-      "title": "Traces",
+      "title": "Block Height Traces",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "id": 3,
+      "panels": [],
+      "title": "Recent Traces",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 80 }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 14 },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "filters": [],
+          "limit": 10,
+          "query": "{duration > 2s}",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Slow Traces (> 1s)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null }
+          ]}
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 26 },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "pluginVersion": "11.5.2",
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "filters": [],
+          "limit": 10,
+          "query": "{name=~\"NewHeight: .*\"}",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Recent Block Traces",
       "type": "table"
     }
   ],
-  "preload": false,
   "refresh": "",
-  "schemaVersion": 40,
-  "tags": [],
+  "schemaVersion": 39,
+  "tags": ["traces"],
   "templating": {
     "list": [
       {
-        "current": {
-          "text": "",
-          "value": ""
-        },
-        "label": "BlockHeight",
+        "current": { "text": "", "value": "" },
+        "label": "Block Height",
         "name": "height",
         "options": [],
         "query": "",
-        "type": "custom"
+        "type": "textbox"
       }
     ]
   },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
+  "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Gno Open Telemetry Traces",
+  "title": "Gno Traces Explorer",
   "uid": "dee7ykpziof0gf",
-  "version": 4,
+  "version": 2,
   "weekStart": ""
 }

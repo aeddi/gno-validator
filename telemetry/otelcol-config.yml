@@ -3,13 +3,34 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
+  hostmetrics:
+    collection_interval: 15s
+    root_path: /hostfs
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      filesystem:
+      network:
+      load:
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 15s
+    container_labels_to_metric_labels:
+      com.docker.compose.service: container_service
 
 processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
   batch:
 
 exporters:
   prometheus:
     endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
   otlp_http/tempo:
     endpoint: http://tempo:4318
 
@@ -20,11 +41,19 @@ extensions:
 service:
   extensions: [health_check]
   pipelines:
-    metrics:
+    metrics/app:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    metrics/host:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    metrics/docker:
+      receivers: [docker_stats]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlp_http/tempo]
