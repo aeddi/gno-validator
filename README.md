@@ -131,3 +131,7 @@ If the password is written to `.env`, an attacker who dumps the disk (via snapsh
 - gnoland: up to 30 GB by default (30 × 1 GB files, rotated), configurable via `GNOLAND_LOG_SIZE`
 - gnokms: up to 1 GB
 - otelcol, tempo, prometheus, grafana: up to 100 MB each
+
+## Optional: Reverse Proxy
+
+The [`reverse-proxy/`](reverse-proxy/) subfolder contains a Caddy setup that exposes the node services (RPC, Grafana, Gnockpit) over HTTPS with automatic Let's Encrypt certificates. See [`reverse-proxy/README.md`](reverse-proxy/README.md) for setup instructions.
