@@ -3,7 +3,7 @@
 Caddy reverse proxy with automatic HTTPS (Let's Encrypt) for the validator node services.
 
 Caddy obtains and renews TLS certificates automatically — no manual cert management.
-A landing page at the root domain links to all three services.
+A landing page at the root domain links to all configured services.
 
 ## Prerequisites
 
@@ -16,10 +16,8 @@ Create one unproxied A record per service pointing to your server's IP:
 
 | Name | Type | Value |
 |------|------|-------|
-| `<chain-id>.<domain>` | A | server IP |
-| `rpc.<chain-id>.<domain>` | A | server IP |
-| `grafana.<chain-id>.<domain>` | A | server IP |
-| `gnockpit.<chain-id>.<domain>` | A | server IP |
+| `<domain>` | A | server IP |
+| `<service>.<domain>` | A | server IP (one per service in `config`) |
 
 > Records must be **unproxied** (grey cloud on Cloudflare) so Let's Encrypt can reach the server directly.
 
