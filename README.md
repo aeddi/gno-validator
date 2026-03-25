@@ -25,6 +25,9 @@ Edit `.env` and set:
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
 - `GRAFANA_PORT` — host port for the Grafana web UI (default: `3000`)
+- `GNOLAND_RPC_LADDR` — interface gnoland RPC binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing RPC through a reverse proxy only.
+- `GNOLAND_P2P_LADDR` — interface gnoland P2P binds to (default: `0.0.0.0`). Use `127.0.0.1` only if this node should not accept inbound peer connections.
+- `GRAFANA_LADDR` — interface Grafana binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing Grafana through a reverse proxy only.
 - `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `30`, i.e. 30 GB total)
 
 ### 2. Generate the signing identity
@@ -85,7 +88,7 @@ make up
 
 Once the stack is up, open the Grafana dashboard at [http://localhost:3000](http://localhost:3000) (or the port set in `GRAFANA_PORT`).
 
-No login required — anonymous access is enabled with Admin role.
+Anonymous access is enabled in read-only (Viewer) mode — no login required for browsing dashboards. To log in as admin, use the credentials set in `.env` (default: `admin` / `admin`).
 
 ## Operations
 
@@ -126,11 +129,46 @@ If the password is written to `.env`, an attacker who dumps the disk (via snapsh
 
 **If you must inject the password non-interactively** (e.g. in a supervised init system), pass it as a runtime environment variable rather than persisting it to a file. Be aware that this still exposes the password in `/proc/<pid>/environ` and potentially in shell history — use a secrets manager or a systemd `EnvironmentFile` with `0600` permissions and consider whether the trade-off is acceptable for your threat model.
 
+`GRAFANA_ADMIN_PASSWORD` and `GRAFANA_SMTP_PASSWORD` carry less sensitive material but follow the same principle: leaving them unset causes `make up` / `make update` to prompt for them at startup, keeping them out of any file on disk.
+
 ## Logging
 
 - gnoland: up to 30 GB by default (30 × 1 GB files, rotated), configurable via `GNOLAND_LOG_SIZE`
 - gnokms: up to 1 GB
 - otelcol, tempo, prometheus, grafana: up to 100 MB each
+
+## Optional: Grafana admin
+
+By default, Grafana uses `admin` / `admin` as credentials. To set custom credentials, add to `.env`:
+
+```sh
+GRAFANA_ADMIN_USER=your-username
+GRAFANA_ADMIN_PASSWORD=your-password
+```
+
+If `GRAFANA_ADMIN_USER` is set but `GRAFANA_ADMIN_PASSWORD` is not, `make up` and `make update` will prompt for the password at startup — see [Password security](#password-security).
+
+Admin credentials are required to configure alerting contact points and manage users.
+
+## Optional: Grafana alerting
+
+Grafana can send an email alert if no new block has been produced for a configurable duration. This requires SMTP and a Grafana admin user to be configured.
+
+Add to `.env`:
+
+```sh
+GRAFANA_ADMIN_USER=your-username        # required for alerting to be provisioned
+GRAFANA_SMTP_ENABLED=true
+GRAFANA_SMTP_HOST=smtp.example.com:587
+GRAFANA_SMTP_USER=your-smtp-user
+GRAFANA_SMTP_FROM_ADDRESS=alerts@example.com
+GRAFANA_SMTP_FROM_NAME=Grafana
+GRAFANA_SMTP_PASSWORD=your-smtp-password  # or leave unset to be prompted at startup
+GRAFANA_ALERT_EMAIL_ADDRESSES=you@example.com,other@example.com
+GRAFANA_BLOCK_STALL_SECONDS=300           # seconds without a new block before alerting (default: 300)
+```
+
+The alert fires when no new block is detected for `GRAFANA_BLOCK_STALL_SECONDS`. The minimum effective value is `15` (the Prometheus scrape interval); values below that will never fire.
 
 ## Optional: Reverse Proxy
 
