@@ -31,8 +31,6 @@ if [ "$2" = "start" ]; then
     -config-path "$CONFIG" >/dev/null
   gnoland config set telemetry.exporter_endpoint http://otelcol:4318 \
     -config-path "$CONFIG" >/dev/null
-  gnoland config set telemetry.service_instance_id validator \
-    -config-path "$CONFIG" >/dev/null
 
   if [ -n "$GNOLAND_EARLY_START" ]; then
     set -- "$@" -x-early-start

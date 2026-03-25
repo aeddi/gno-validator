@@ -72,6 +72,8 @@ Set the required fields:
 - `p2p.external_address` — your public P2P address, e.g. `tcp://<your-ip>:26656`
 - `p2p.seeds` — comma-separated seed nodes for initial peer discovery
 - `p2p.persistent_peers` — comma-separated peers to maintain persistent connections to
+- `telemetry.service_instance_id` — node identifier shown in Grafana (e.g. your moniker)
+- `telemetry.service_name` — service identifier shown in Grafana (e.g. the chain ID)
 
 Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` via
 `gnoland config set` on every container start. Mandatory settings (remote signer, telemetry)
