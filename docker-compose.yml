@@ -52,8 +52,8 @@ services:
             - ./config.overrides:/config.overrides:ro
             - gnokms-sock:/sock
         ports:
-            - '${GNOLAND_RPC_PORT:-26657}:26657'
-            - '${GNOLAND_P2P_PORT:-26656}:26656'
+            - '${GNOLAND_RPC_LADDR:-0.0.0.0}:${GNOLAND_RPC_PORT:-26657}:26657'
+            - '${GNOLAND_P2P_LADDR:-0.0.0.0}:${GNOLAND_P2P_PORT:-26656}:26656'
         depends_on:
             gnokms:
                 condition: service_started
@@ -146,7 +146,7 @@ services:
             - ./telemetry/grafana/entrypoint.sh:/entrypoint.sh:ro
             - ./telemetry/grafana/provisioning:/etc/grafana/provisioning:ro
         ports:
-            - '${GRAFANA_PORT:-3000}:3000'
+            - '${GRAFANA_LADDR:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000'
         depends_on:
             prometheus:
                 condition: service_started

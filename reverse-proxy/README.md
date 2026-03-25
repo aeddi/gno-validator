@@ -44,6 +44,14 @@ Edit `.env` and set:
 
 - `DOMAIN` — server domain, e.g. `gnoland1.mydomain.com`
 
+In the root `.env`, restrict RPC and Grafana to the loopback interface so they
+are only reachable through the reverse proxy:
+
+```sh
+GNOLAND_RPC_LADDR=127.0.0.1
+GRAFANA_LADDR=127.0.0.1
+```
+
 Then start:
 
 ```sh
