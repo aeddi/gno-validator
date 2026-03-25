@@ -172,6 +172,9 @@ up: .check-env ## Start all services
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
 	fi; \
+	if grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GRAFANA_ADMIN_PASSWORD: " GRAFANA_ADMIN_PASSWORD && echo "" && export GRAFANA_ADMIN_PASSWORD; \
+	fi; \
 	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
 	fi; \
@@ -210,6 +213,9 @@ reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
 update: .check-env build ## Rebuild images and restart (binary update)
 	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
+	fi; \
+	if grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
+		read -s -p "GRAFANA_ADMIN_PASSWORD: " GRAFANA_ADMIN_PASSWORD && echo "" && export GRAFANA_ADMIN_PASSWORD; \
 	fi; \
 	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
