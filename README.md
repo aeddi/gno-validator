@@ -168,7 +168,7 @@ GRAFANA_ALERT_EMAIL_ADDRESSES=you@example.com,other@example.com
 GRAFANA_BLOCK_STALL_SECONDS=300           # seconds without a new block before alerting (default: 300)
 ```
 
-The alert fires when no new block is detected for `GRAFANA_BLOCK_STALL_SECONDS`. The minimum effective value is `15` (the Prometheus scrape interval); values below that will never fire.
+The alert fires when no new block is detected for `GRAFANA_BLOCK_STALL_SECONDS`. The minimum effective value is `90`: the alert uses `increase()` over this window, which requires at least 2 data points from the gnoland OTLP push interval (~60s) — values below ~90s risk returning no data intermittently and missing alerts.
 
 ## Optional: Reverse Proxy
 

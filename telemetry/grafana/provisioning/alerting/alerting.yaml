@@ -36,7 +36,7 @@ groups:
               from: ${GRAFANA_BLOCK_STALL_SECONDS}
               to: 0
             model:
-              expr: 'increase(block_gas_price_hist_token_count[${GRAFANA_BLOCK_STALL_SECONDS}s]) == 0'
+              expr: 'increase(block_interval_hist_seconds_count[${GRAFANA_BLOCK_STALL_SECONDS}s]) == 0'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -47,7 +47,7 @@ groups:
               from: 60
               to: 0
             model:
-              expr: 'block_gas_price_hist_token_count'
+              expr: 'block_interval_hist_seconds_count'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200

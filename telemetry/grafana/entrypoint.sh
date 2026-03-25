@@ -2,6 +2,7 @@
 set -e
 
 # Copy provisioning to a writable location so we can process templates
+rm -rf /tmp/grafana-provisioning
 cp -r /etc/grafana/provisioning /tmp/grafana-provisioning
 
 # Substitute env vars in alerting config (scoped to avoid mangling PromQL variables)
