@@ -9,7 +9,6 @@ A landing page at the root domain links to all three services.
 
 - Docker and Docker Compose v2
 - make
-- `envsubst` (part of `gettext`, available on most Linux distros)
 
 ## DNS records
 
@@ -37,12 +36,13 @@ Create one unproxied A record per service pointing to your server's IP:
 
 ```sh
 cd reverse-proxy
-cp .env.example .env
+cp config.example config
 ```
 
-Edit `.env` and set:
+Edit `config` and set:
 
-- `DOMAIN` — server domain, e.g. `gnoland1.mydomain.com`
+- `domain` — server domain, e.g. `gnoland1.mydomain.com`
+- services (name=port pairs) — add, remove, or rename entries as needed
 
 In the root `.env`, restrict RPC and Grafana to the loopback interface so they
 are only reachable through the reverse proxy:
@@ -58,7 +58,8 @@ Then start:
 make up
 ```
 
-Caddy will obtain certificates on first start. Subsequent renewals are fully automatic.
+`make up` generates the Caddyfile and landing page from `config` and `templates/`,
+then starts Caddy. Caddy obtains certificates on first start; renewals are fully automatic.
 
 ## Operations
 

@@ -1,0 +1,9 @@
+# Required — server domain (e.g. chainid.mydomain.com)
+domain=
+
+# Services to expose via the reverse proxy (name=port), one per line.
+# Each entry creates a subdomain and a link on the landing page,
+# (e.g. rpc.mydomain.com).
+rpc=26657
+grafana=3000
+gnockpit=8080

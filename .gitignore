@@ -14,6 +14,6 @@ gnokms-data/
 # Downloaded lnav binary — fetched on demand, not tracked
 .lnav/bin/
 
-# reverse-proxy — local secrets and generated files
-reverse-proxy/.env
-reverse-proxy/www/index.html
+# reverse-proxy — local config and generated files
+reverse-proxy/config
+reverse-proxy/caddy-data/

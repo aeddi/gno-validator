@@ -3,10 +3,9 @@ services:
     image: caddy:2
     restart: unless-stopped
     network_mode: host
-    env_file: .env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./www:/srv/www:ro
+      - ./caddy-data/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data/www:/srv/www:ro
       - caddy_data:/data
       - caddy_config:/config
 
