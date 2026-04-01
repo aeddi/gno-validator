@@ -2,7 +2,7 @@
 
 # ---- Create secrets if missing, always reset config to defaults
 gnoland secrets init &>/dev/null
-gnoland config init -force &>/dev/null
+gnoland config init -force >/dev/null
 
 # ---- Apply operator config overrides (moniker, peers, external address, etc.)
 OVERRIDES="/config.overrides"

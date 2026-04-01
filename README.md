@@ -28,7 +28,7 @@ Edit `.env` and set:
 - `GNOLAND_RPC_LADDR` — interface gnoland RPC binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing RPC through a reverse proxy only.
 - `GNOLAND_P2P_LADDR` — interface gnoland P2P binds to (default: `0.0.0.0`). Use `127.0.0.1` only if this node should not accept inbound peer connections.
 - `GRAFANA_LADDR` — interface Grafana binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing Grafana through a reverse proxy only.
-- `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `30`, i.e. 30 GB total)
+- `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `3`, i.e. 3 GB total)
 
 ### 2. Generate the signing identity
 
@@ -128,7 +128,7 @@ If the password is written to `.env`, an attacker who dumps the disk (via snapsh
 
 ## Logging
 
-- gnoland: up to 30 GB by default (30 × 1 GB files, rotated), configurable via `GNOLAND_LOG_SIZE`
+- gnoland: up to 3 GB by default (3 × 1 GB files, rotated), configurable via `GNOLAND_LOG_SIZE`
 - gnokms: up to 1 GB
 - otelcol, tempo, prometheus, grafana: up to 100 MB each
 

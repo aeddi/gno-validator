@@ -45,12 +45,14 @@ rm -f "$probe_sock"
 # ---- Clean up stale socket from a previous run (named volume persists across restarts)
 rm -f /sock/gnokms.sock
 
-# ---- Allow non-root containers (e.g. gnoland) to connect to the socket
-umask 0
-
 # ---- Start gnokms with signal forwarding for clean container shutdown
 mkfifo /tmp/gnokms-pass-$$
 printf '%s\n' "$GNOKMS_PASSWORD" >/tmp/gnokms-pass-$$ &
+
+# Allow non-root containers (e.g. gnoland) to connect to the socket
+umask 0
+
+# Start gnokms with the provided password
 gnokms gnokey \
   -insecure-password-stdin \
   -home "$KEYSTORE" \
