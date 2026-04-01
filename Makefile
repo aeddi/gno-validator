@@ -123,12 +123,16 @@ print-infos: .ensure-gnoland .ensure-gnokms .init-node-data ## Print node identi
 		gno-validator-gnoland \
 		gnoland config get p2p.persistent_peers --raw \
 		-config-path /gnoland-data/config/config.toml)"
-	@P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	@P2P_LADDR=$$(grep -E '^GNOLAND_P2P_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	P2P_LADDR=$${P2P_LADDR:-0.0.0.0}; \
+	P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
 	P2P_PORT=$${P2P_PORT:-26656}; \
-	echo "p2p listener:      tcp://0.0.0.0:$$P2P_PORT"
-	@RPC_PORT=$$(grep -E '^GNOLAND_RPC_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	echo "p2p listener:      tcp://$$P2P_LADDR:$$P2P_PORT"
+	@RPC_LADDR=$$(grep -E '^GNOLAND_RPC_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
+	RPC_LADDR=$${RPC_LADDR:-0.0.0.0}; \
+	RPC_PORT=$$(grep -E '^GNOLAND_RPC_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
 	RPC_PORT=$${RPC_PORT:-26657}; \
-	echo "rpc listener:      tcp://0.0.0.0:$$RPC_PORT"
+	echo "rpc listener:      tcp://$$RPC_LADDR:$$RPC_PORT"
 	@echo ""
 	@echo "=== Build Information ==="
 	@echo "gno commit:        $$(docker inspect --format '{{index .Config.Labels "gno.commit"}}' gno-validator-gnoland 2>/dev/null)"
