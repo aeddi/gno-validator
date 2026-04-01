@@ -8,7 +8,7 @@ ARG     GNO_COMMIT_HASH
 
 RUN     apk add --no-cache git ca-certificates
 RUN     git clone https://github.com/${GNO_REPO}.git /gnoroot && \
-        git -C /gnoroot checkout ${GNO_COMMIT_HASH:-${GNO_VERSION}}
+  git -C /gnoroot checkout ${GNO_COMMIT_HASH:-${GNO_VERSION}}
 
 WORKDIR /gnoroot
 
@@ -24,21 +24,18 @@ ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
 ARG     BUILD_DATE
 LABEL   gno.commit="${GNO_COMMIT_HASH}" \
-        gno.version="${GNO_VERSION}" \
-        gno.repo="${GNO_REPO}" \
-        build.date="${BUILD_DATE}"
+  gno.version="${GNO_VERSION}" \
+  gno.repo="${GNO_REPO}" \
+  build.date="${BUILD_DATE}"
 
 RUN     apk add --no-cache ca-certificates
-
-WORKDIR /gnoroot
 
 COPY    --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
 COPY    --from=builder /gnoroot/gnovm/stdlibs /gnoroot/gnovm/stdlibs
 COPY    --from=builder /gnoroot/gnovm/tests/stdlibs /gnoroot/gnovm/tests/stdlibs
 
 COPY    docker/gnoland-entrypoint.sh /entrypoint.sh
-COPY    docker/apply-overrides.sh /apply-overrides.sh
-RUN     chmod +x /entrypoint.sh /apply-overrides.sh
+RUN     chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -49,9 +46,9 @@ ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
 ARG     BUILD_DATE
 LABEL   gno.commit="${GNO_COMMIT_HASH}" \
-        gno.version="${GNO_VERSION}" \
-        gno.repo="${GNO_REPO}" \
-        build.date="${BUILD_DATE}"
+  gno.version="${GNO_VERSION}" \
+  gno.repo="${GNO_REPO}" \
+  build.date="${BUILD_DATE}"
 
 RUN     apk add --no-cache ca-certificates
 

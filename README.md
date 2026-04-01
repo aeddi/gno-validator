@@ -41,25 +41,7 @@ Creates the key `gnokms-docker-key` in `gnokms-data/keystore/`.
 - If `GNOKMS_PASSWORD` is set in `.env`, it is used automatically (no prompt).
 - Otherwise, `gnokey` will prompt you interactively.
 
-### 3. Provide genesis.json
-
-Copy your `genesis.json` to the repo root before starting the node:
-
-```sh
-cp /path/to/genesis.json .
-```
-
-### 4. Initialize
-
-```sh
-make init
-```
-
-Builds images and initializes `gnoland-data/config/config.toml` and `gnoland-data/secrets/`.
-
-> **Warning:** Only run `make init` once. Re-running it on an existing node will overwrite your config and secrets.
-
-### 5. Configure the node
+### 3. Configure the node
 
 ```sh
 cp config.overrides.example config.overrides
@@ -75,18 +57,29 @@ Set the required fields:
 - `telemetry.service_instance_id` — node identifier shown in Grafana (e.g. your moniker)
 - `telemetry.service_name` — service identifier shown in Grafana (e.g. the chain ID)
 
-Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` via
-`gnoland config set` on every container start. Mandatory settings (remote signer, telemetry)
-are applied after and override any conflicting entries. `config.overrides` is gitignored — it
+Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` on every
+node start and `make print-infos` run. Mandatory settings (remote signer, telemetry) are
+applied after and override any conflicting entries. `config.overrides` is gitignored — it
 stays local to each operator.
 
-### 6. Start
+### 4. Provide genesis.json
+
+Copy your `genesis.json` to the repo root before starting the node:
+
+```sh
+cp /path/to/genesis.json .
+```
+
+### 5. Start
 
 ```sh
 make up
 ```
 
-### 7. Open Grafana
+On first start, secrets and config are created automatically. Config is re-initialized on
+every start to ensure a clean state, with overrides applied on top.
+
+### 6. Open Grafana
 
 Once the stack is up, open the Grafana dashboard at [http://localhost:3000](http://localhost:3000) (or the port set in `GRAFANA_PORT`).
 
@@ -104,7 +97,7 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 | `make logs-telemetry` | Follow logs for all telemetry services                                          |
 | `make status`         | Show container status                                               |
 | `make gen-identity`   | Generate the validator signing identity                             |
-| `make print-identity` | Print the validator address and public key                          |
+| `make print-infos`    | Print node identity, network config, build metadata, and checksums  |
 | `make build`          | Rebuild Docker images                                               |
 | `make update`         | Rebuild images and restart (binary update)                          |
 | `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |

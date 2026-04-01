@@ -1,27 +1,13 @@
 SHELL := /bin/bash
 
 LNAV_VERSION := 0.13.2
-HOST_UID     := $(shell id -u)
-HOST_GID     := $(shell id -g)
+export HOST_UID := $(shell id -u)
+export HOST_GID := $(shell id -g)
 
-.PHONY: init gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland .init-node-data
+.PHONY: gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland
 
 .check-env:
 	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
-
-init: .check-env build ## First-time setup: build images, init node config/secrets
-	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
-	docker compose run --rm --user $(HOST_UID):$(HOST_GID) gnoland gnoland config init -force \
-		-config-path /gnoland-data/config/config.toml
-	docker compose run --rm --user $(HOST_UID):$(HOST_GID) gnoland gnoland secrets init -force \
-		-data-dir /gnoland-data/secrets
-	@echo ""
-	@echo "Init complete. Before running 'make up':"
-	@echo "  1. cp config.overrides.example config.overrides — set moniker, p2p.external_address, p2p.seeds, p2p.persistent_peers"
-	@echo "  2. Copy genesis.json to the repo root"
-	@echo ""
-	@echo "  Note: config.overrides is applied on each start. Mandatory settings (remote signer,"
-	@echo "        telemetry) are applied after and will override any conflicting entries."
 
 .ensure-gnokms:
 	@docker image inspect gno-validator-gnokms >/dev/null 2>&1 || \
@@ -30,13 +16,6 @@ init: .check-env build ## First-time setup: build images, init node config/secre
 .ensure-gnoland:
 	@docker image inspect gno-validator-gnoland >/dev/null 2>&1 || \
 		(echo "Building gnoland image, please wait..." && docker compose build gnoland)
-
-.init-node-data: .ensure-gnoland
-	@mkdir -p gnoland-data/config gnoland-data/secrets gnokms-data/keystore
-	@docker compose run --rm --no-deps --user $(HOST_UID):$(HOST_GID) gnoland gnoland config init \
-		-config-path /gnoland-data/config/config.toml &>/dev/null || true
-	@docker compose run --rm --no-deps --user $(HOST_UID):$(HOST_GID) gnoland gnoland secrets init \
-		-data-dir /gnoland-data/secrets &>/dev/null || true
 
 .lnav/bin/lnav:
 	@rm -f .lnav/bin/lnav.zip; rm -rf .lnav/bin/lnav-$(LNAV_VERSION); \
@@ -82,14 +61,8 @@ gen-identity: .ensure-gnokms ## Generate the validator signing identity in the g
 			add gnokms-docker-key --home /gnokms-data/keystore; \
 	fi
 
-print-infos: .ensure-gnoland .ensure-gnokms .init-node-data ## Print node identity, network config, build metadata, and SHA-256 checksums
-	@if [ -f config.overrides ]; then \
-		docker run --rm \
-			--entrypoint /apply-overrides.sh \
-			-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-			-v "$(CURDIR)/config.overrides:/config.overrides:ro" \
-			gno-validator-gnoland; \
-	fi
+print-infos: .ensure-gnoland .ensure-gnokms ## Print node identity, network config, build metadata, and SHA-256 checksums
+	@mkdir -p gnoland-data/config gnoland-data/secrets
 	@echo "=== Identity ==="
 	@docker run --rm \
 		--entrypoint gnokey \
@@ -98,31 +71,27 @@ print-infos: .ensure-gnoland .ensure-gnokms .init-node-data ## Print node identi
 		list --home /gnokms-data/keystore \
 	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator address: " addr "\nvalidator pub_key: " pub}'
 	@echo "node_id:           $$(docker run --rm \
-		-e GNOLAND_NTP_UPDATE= \
+		--user $(HOST_UID):$(HOST_GID) \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		gno-validator-gnoland \
-		gnoland secrets get node_id.id --raw \
-		-data-dir /gnoland-data/secrets)"
+		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
+		gno-validator-gnoland gnoland secrets get node_id.id --raw)"
 	@echo "moniker:           $$(docker run --rm \
-		-e GNOLAND_NTP_UPDATE= \
+		--user $(HOST_UID):$(HOST_GID) \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		gno-validator-gnoland \
-		gnoland config get moniker --raw \
-		-config-path /gnoland-data/config/config.toml)"
+		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
+		gno-validator-gnoland gnoland config get moniker --raw)"
 	@echo ""
 	@echo "=== Network Configuration ==="
 	@echo "seeds:             $$(docker run --rm \
-		-e GNOLAND_NTP_UPDATE= \
+		--user $(HOST_UID):$(HOST_GID) \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		gno-validator-gnoland \
-		gnoland config get p2p.seeds --raw \
-		-config-path /gnoland-data/config/config.toml)"
+		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
+		gno-validator-gnoland gnoland config get p2p.seeds --raw)"
 	@echo "persistent peers:  $$(docker run --rm \
-		-e GNOLAND_NTP_UPDATE= \
+		--user $(HOST_UID):$(HOST_GID) \
 		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		gno-validator-gnoland \
-		gnoland config get p2p.persistent_peers --raw \
-		-config-path /gnoland-data/config/config.toml)"
+		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
+		gno-validator-gnoland gnoland config get p2p.persistent_peers --raw)"
 	@P2P_LADDR=$$(grep -E '^GNOLAND_P2P_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
 	P2P_LADDR=$${P2P_LADDR:-0.0.0.0}; \
 	P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \

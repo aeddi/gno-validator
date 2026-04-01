@@ -33,6 +33,7 @@ services:
                 GNO_COMMIT_HASH: ${GNO_COMMIT_HASH:-}
                 BUILD_DATE: ${BUILD_DATE:-}
         image: gno-validator-gnoland
+        user: "${HOST_UID:-0}:${HOST_GID:-0}"
         environment:
             GNOLAND_EARLY_START: ${GNOLAND_EARLY_START}
             GNOLAND_NTP_UPDATE: ${GNOLAND_NTP_UPDATE:-1}
@@ -42,10 +43,6 @@ services:
             - --skip-genesis-sig-verification
             - -log-format
             - json
-            - -data-dir
-            - /gnoland-data
-            - -genesis
-            - /genesis.json
         volumes:
             - ./gnoland-data:/gnoland-data
             - ./genesis.json:/genesis.json:ro
