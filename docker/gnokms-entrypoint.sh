@@ -40,6 +40,8 @@ kill "$probe_pid" 2>/dev/null || true
 wait "$probe_pid" 2>/dev/null || true
 rm -f "$probe_sock"
 
+[ "$1" = "check" ] && exit 0
+
 # ---- Clean up stale socket from a previous run (named volume persists across restarts)
 rm -f /sock/gnokms.sock
 

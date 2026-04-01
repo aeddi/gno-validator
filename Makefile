@@ -4,10 +4,9 @@ LNAV_VERSION := 0.13.2
 export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
-.PHONY: gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .check-env .ensure-gnokms .ensure-gnoland
+GNOLAND_RUN = docker run --rm --user $(HOST_UID):$(HOST_GID) -v "$(CURDIR)/gnoland-data:/gnoland-data" $(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") gno-validator-gnoland
 
-.check-env:
-	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
+.PHONY: gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .ensure-gnokms .ensure-gnoland
 
 .ensure-gnokms:
 	@docker image inspect gno-validator-gnokms >/dev/null 2>&1 || \
@@ -42,24 +41,17 @@ export HOST_GID := $(shell id -g)
 
 gen-identity: .ensure-gnokms ## Generate the validator signing identity in the gnokms keystore
 	@mkdir -p gnokms-data/keystore
-	@if grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
-		echo "Note: using GNOKMS_PASSWORD from .env (password not shown)"; \
-		pass=$$(grep -E '^GNOKMS_PASSWORD=' .env | cut -d= -f2-) && \
-		printf '%s\n%s\n' "$$pass" "$$pass" | \
-		docker run --rm -i \
-			--user $(HOST_UID):$(HOST_GID) \
-			--entrypoint gnokey \
-			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
-			gno-validator-gnokms \
-			add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin; \
-	else \
-		docker run --rm -it \
-			--user $(HOST_UID):$(HOST_GID) \
-			--entrypoint gnokey \
-			-v "$(CURDIR)/gnokms-data:/gnokms-data" \
-			gno-validator-gnokms \
-			add gnokms-docker-key --home /gnokms-data/keystore; \
-	fi
+	@GNOKMS_PASSWORD=$${GNOKMS_PASSWORD:-$$(grep -E '^GNOKMS_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)}; \
+	if [ -z "$$GNOKMS_PASSWORD" ]; then \
+		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo ""; \
+	fi; \
+	printf '%s\n%s\n' "$$GNOKMS_PASSWORD" "$$GNOKMS_PASSWORD" | \
+	docker run --rm -i \
+		--user $(HOST_UID):$(HOST_GID) \
+		--entrypoint gnokey \
+		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
+		gno-validator-gnokms \
+		add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin
 
 print-infos: .ensure-gnoland .ensure-gnokms ## Print node identity, network config, build metadata, and SHA-256 checksums
 	@mkdir -p gnoland-data/config gnoland-data/secrets
@@ -70,28 +62,12 @@ print-infos: .ensure-gnoland .ensure-gnokms ## Print node identity, network conf
 		gno-validator-gnokms \
 		list --home /gnokms-data/keystore \
 	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator address: " addr "\nvalidator pub_key: " pub}'
-	@echo "node_id:           $$(docker run --rm \
-		--user $(HOST_UID):$(HOST_GID) \
-		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
-		gno-validator-gnoland gnoland secrets get node_id.id --raw)"
-	@echo "moniker:           $$(docker run --rm \
-		--user $(HOST_UID):$(HOST_GID) \
-		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
-		gno-validator-gnoland gnoland config get moniker --raw)"
+	@echo "node_id:           $$($(GNOLAND_RUN) gnoland secrets get node_id.id --raw)"
+	@echo "moniker:           $$($(GNOLAND_RUN) gnoland config get moniker --raw)"
 	@echo ""
 	@echo "=== Network Configuration ==="
-	@echo "seeds:             $$(docker run --rm \
-		--user $(HOST_UID):$(HOST_GID) \
-		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
-		gno-validator-gnoland gnoland config get p2p.seeds --raw)"
-	@echo "persistent peers:  $$(docker run --rm \
-		--user $(HOST_UID):$(HOST_GID) \
-		-v "$(CURDIR)/gnoland-data:/gnoland-data" \
-		$(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") \
-		gno-validator-gnoland gnoland config get p2p.persistent_peers --raw)"
+	@echo "seeds:             $$($(GNOLAND_RUN) gnoland config get p2p.seeds --raw)"
+	@echo "persistent peers:  $$($(GNOLAND_RUN) gnoland config get p2p.persistent_peers --raw)"
 	@P2P_LADDR=$$(grep -E '^GNOLAND_P2P_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
 	P2P_LADDR=$${P2P_LADDR:-0.0.0.0}; \
 	P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
@@ -141,16 +117,18 @@ build: ## Build Docker images (uses cache; rebuilds automatically when a new com
 	export BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
 	docker compose build
 
-up: .check-env ## Start all services
-	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
+up: ## Start all services
+	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
+	@if [ -z "$${GNOKMS_PASSWORD}" ] && ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
 	fi; \
-	if grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
+	if [ -z "$${GRAFANA_ADMIN_PASSWORD}" ] && grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GRAFANA_ADMIN_PASSWORD: " GRAFANA_ADMIN_PASSWORD && echo "" && export GRAFANA_ADMIN_PASSWORD; \
 	fi; \
-	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
+	if [ -z "$${GRAFANA_SMTP_PASSWORD}" ] && grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
 		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
 	fi; \
+	docker compose run --rm --no-deps -T gnokms check >/dev/null && \
 	docker compose up -d
 
 down: ## Stop and remove containers
@@ -183,14 +161,4 @@ reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
 	@rm -rf gnoland-data/db gnoland-data/wal
 	@printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' > gnoland-data/secrets/priv_validator_state.json
 
-update: .check-env build ## Rebuild images and restart (binary update)
-	@if ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
-	fi; \
-	if grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GRAFANA_ADMIN_PASSWORD: " GRAFANA_ADMIN_PASSWORD && echo "" && export GRAFANA_ADMIN_PASSWORD; \
-	fi; \
-	if grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
-	fi; \
-	docker compose up -d
+update: build up ## Rebuild images and restart (binary update)
