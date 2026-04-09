@@ -58,7 +58,7 @@ services:
                 condition: service_started
         cap_add:
             - SYS_TIME
-        restart: unless-stopped
+        restart: on-failure
         logging:
             driver: json-file
             options:
