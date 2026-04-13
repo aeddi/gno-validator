@@ -137,12 +137,12 @@ down: ## Stop and remove containers
 restart: ## Restart all services (does not re-read compose file; use 'make down && make up' after config changes)
 	docker compose restart
 
-logs-gnoland: ## Open interactive log TUI (level filter + search) — downloads lnav on first run
+logs-gnoland: ## Open interactive log TUI — downloads lnav on first run. Use SINCE=<duration> to control history (default: 1h)
 	@if $(MAKE) -s .lnav/bin/lnav; then \
-		TERM=xterm-256color .lnav/bin/lnav -I ./.lnav docker://gno-validator-gnoland-1; \
+		TERM=xterm-256color .lnav/bin/lnav -I ./.lnav <(docker compose logs --since $${SINCE:-1h} -f gnoland 2>/dev/null); \
 	else \
 		echo "lnav unavailable, falling back to plain logs..."; \
-		docker compose logs -f gnoland; \
+		docker compose logs --since $${SINCE:-1h} -f gnoland; \
 	fi
 
 logs-gnokms: ## Follow gnokms logs
