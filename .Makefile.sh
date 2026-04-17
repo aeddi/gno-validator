@@ -337,7 +337,7 @@ cmd_build() {
     version="$(env_get GNO_VERSION master)"
 
     echo "Resolving commit hash for ${version} on ${repo}..."
-    commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1)"
+    commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1 || true)"
     if [[ -z "$commit" ]]; then
         echo "Warning: could not resolve ${version} to a commit hash (no network or direct commit?), cache may be stale"
         commit="$version"
@@ -352,23 +352,22 @@ cmd_build() {
 
     # Decide per-image whether a rebuild is needed.
     local force="${FORCE:-0}" gnokms_needs gnoland_needs
+    echo "Build inputs:"
+    echo "  repo=${repo}  version=${version}  commit=${commit:0:12}"
+    echo "  dockerfile sha256=${DOCKERFILE_HASH:0:12}"
+    echo ""
+
     if [[ "$force" == "1" ]]; then
         echo "FORCE=1 → rebuilding both images."
         gnokms_needs=1; gnoland_needs=1
     else
-        echo "Build inputs:"
-        echo "  repo=${repo}  version=${version}  commit=${commit:0:12}"
-        echo "  dockerfile sha256=${DOCKERFILE_HASH:0:12}"
-        echo ""
         echo "Comparing with existing image labels..."
-        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
         if image_needs_rebuild "$GNOKMS_IMAGE" gnokms; then
             gnokms_needs=1
         else
             gnokms_needs=0
             echo "  gnokms: up to date"
         fi
-        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
         if image_needs_rebuild "$GNOLAND_IMAGE" gnoland; then
             gnoland_needs=1
         else
