@@ -1,164 +1,76 @@
+# Makefile — gno-validator: gnoland validator node with gnokms remote signing.
+#
+# Usage: make <target> [args]
+#
+# Targets:
+#   gen-identity             Generate the validator signing identity in the gnokms keystore
+#   print-infos              Print node identity, network config, build metadata, and SHA-256 checksums
+#   build                    Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
+#   up                       Start all services
+#   down                     Stop and remove containers
+#   restart                  Restart all services (does not re-read compose file; use 'make down && make up' after config changes)
+#   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default history: 1h)
+#   logs-gnokms              Follow gnokms logs
+#   logs-telemetry           Follow logs for all telemetry services
+#   status                   Show container status
+#   reset                    Reset node state: remove db and wal, reset priv_validator_state.json
+#   update                   Rebuild images and restart (binary update)
+#   help                     Show this help message
+#
+# Configuration:
+#   .env                     Environment variables (copy from .env.example)
+#   config.overrides         Per-node gnoland config (copy from config.overrides.example)
+#   genesis.json             Chain genesis file (user-provided)
+
 SHELL := /bin/bash
 
-LNAV_VERSION := 0.13.2
+# HOST_UID/HOST_GID are consumed by docker-compose.yml for gnoland's user mapping.
 export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
-GNOLAND_RUN = docker run --rm --user $(HOST_UID):$(HOST_GID) -v "$(CURDIR)/gnoland-data:/gnoland-data" $(if $(wildcard config.overrides),-v "$(CURDIR)/config.overrides:/config.overrides:ro") gno-validator-gnoland
+# All operational logic lives in .Makefile.sh for readability and reuse.
+# The Makefile is a thin dispatcher around it.
+PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
-.PHONY: gen-identity print-infos build up down restart logs-gnoland logs-gnokms logs-telemetry status update reset .ensure-gnokms .ensure-gnoland
+.PHONY: help gen-identity print-infos build up down restart \
+        logs-gnoland logs-gnokms logs-telemetry status reset update
 
-.ensure-gnokms:
-	@docker image inspect gno-validator-gnokms >/dev/null 2>&1 || \
-		(echo "Building gnokms image, please wait..." && docker compose build gnokms)
+help:
+	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
 
-.ensure-gnoland:
-	@docker image inspect gno-validator-gnoland >/dev/null 2>&1 || \
-		(echo "Building gnoland image, please wait..." && docker compose build gnoland)
+gen-identity:
+	@$(SCRIPT) gen-identity
 
-.lnav/bin/lnav:
-	@rm -f .lnav/bin/lnav.zip; rm -rf .lnav/bin/lnav-$(LNAV_VERSION); \
-	mkdir -p .lnav/bin; \
-	if command -v curl >/dev/null 2>&1; then FETCH="curl -fsSL -o"; \
-	elif command -v wget >/dev/null 2>&1; then FETCH="wget -q -O"; \
-	else echo "Error: curl or wget is required to download lnav" >&2; exit 1; fi; \
-	if ! command -v unzip >/dev/null 2>&1; then echo "Error: unzip is required to extract lnav" >&2; exit 1; fi; \
-	OS=$$(uname -s); ARCH=$$(uname -m); \
-	case "$$OS/$$ARCH" in \
-		Darwin/arm64)  ZIP=lnav-$(LNAV_VERSION)-aarch64-macos.zip ;; \
-		Darwin/*)      ZIP=lnav-$(LNAV_VERSION)-x86_64-macos.zip ;; \
-		Linux/aarch64) ZIP=lnav-$(LNAV_VERSION)-linux-musl-arm64.zip ;; \
-		Linux/*)       ZIP=lnav-$(LNAV_VERSION)-linux-musl-x86_64.zip ;; \
-		*)             echo "Error: unsupported platform $$OS/$$ARCH" >&2; exit 1 ;; \
-	esac; \
-	echo "Downloading lnav v$(LNAV_VERSION)..."; \
-	$$FETCH .lnav/bin/lnav.zip "https://github.com/tstack/lnav/releases/download/v$(LNAV_VERSION)/$$ZIP" && \
-	unzip -q .lnav/bin/lnav.zip "lnav-$(LNAV_VERSION)/lnav" -d .lnav/bin && \
-	mv .lnav/bin/lnav-$(LNAV_VERSION)/lnav .lnav/bin/lnav && \
-	rm -rf .lnav/bin/lnav.zip .lnav/bin/lnav-$(LNAV_VERSION) && \
-	chmod +x .lnav/bin/lnav && \
-	echo "lnav installed at .lnav/bin/lnav"
+print-infos:
+	@$(SCRIPT) print-infos
 
-gen-identity: .ensure-gnokms ## Generate the validator signing identity in the gnokms keystore
-	@mkdir -p gnokms-data/keystore
-	@GNOKMS_PASSWORD=$${GNOKMS_PASSWORD:-$$(grep -E '^GNOKMS_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)}; \
-	if [ -z "$$GNOKMS_PASSWORD" ]; then \
-		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo ""; \
-	fi; \
-	printf '%s\n%s\n' "$$GNOKMS_PASSWORD" "$$GNOKMS_PASSWORD" | \
-	docker run --rm -i \
-		--user $(HOST_UID):$(HOST_GID) \
-		--entrypoint gnokey \
-		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
-		gno-validator-gnokms \
-		add gnokms-docker-key --home /gnokms-data/keystore --insecure-password-stdin
+build:
+	@$(SCRIPT) build
 
-print-infos: .ensure-gnoland .ensure-gnokms ## Print node identity, network config, build metadata, and SHA-256 checksums
-	@mkdir -p gnoland-data/config gnoland-data/secrets
-	@echo "=== Identity ==="
-	@docker run --rm \
-		--entrypoint gnokey \
-		-v "$(CURDIR)/gnokms-data:/gnokms-data" \
-		gno-validator-gnokms \
-		list --home /gnokms-data/keystore \
-	| awk '{for(i=1;i<=NF;i++){if($$i=="addr:") addr=$$(i+1); if($$i=="pub:"){pub=$$(i+1); sub(/,$$/, "", pub)}} print "validator address: " addr "\nvalidator pub_key: " pub}'
-	@echo "node_id:           $$($(GNOLAND_RUN) gnoland secrets get node_id.id --raw)"
-	@echo "moniker:           $$($(GNOLAND_RUN) gnoland config get moniker --raw)"
-	@echo ""
-	@echo "=== Network Configuration ==="
-	@echo "seeds:             $$($(GNOLAND_RUN) gnoland config get p2p.seeds --raw)"
-	@echo "persistent peers:  $$($(GNOLAND_RUN) gnoland config get p2p.persistent_peers --raw)"
-	@P2P_LADDR=$$(grep -E '^GNOLAND_P2P_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	P2P_LADDR=$${P2P_LADDR:-0.0.0.0}; \
-	P2P_PORT=$$(grep -E '^GNOLAND_P2P_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	P2P_PORT=$${P2P_PORT:-26656}; \
-	echo "p2p listener:      tcp://$$P2P_LADDR:$$P2P_PORT"
-	@RPC_LADDR=$$(grep -E '^GNOLAND_RPC_LADDR=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	RPC_LADDR=$${RPC_LADDR:-0.0.0.0}; \
-	RPC_PORT=$$(grep -E '^GNOLAND_RPC_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	RPC_PORT=$${RPC_PORT:-26657}; \
-	echo "rpc listener:      tcp://$$RPC_LADDR:$$RPC_PORT"
-	@echo ""
-	@echo "=== Build Information ==="
-	@echo "gno commit:        $$(docker inspect --format '{{index .Config.Labels "gno.commit"}}' gno-validator-gnoland 2>/dev/null)"
-	@echo "gno version:       $$(docker inspect --format '{{index .Config.Labels "gno.version"}}' gno-validator-gnoland 2>/dev/null)"
-	@echo "gno repo:          $$(docker inspect --format '{{index .Config.Labels "gno.repo"}}' gno-validator-gnoland 2>/dev/null)"
-	@echo "build date:        $$(docker inspect --format '{{index .Config.Labels "build.date"}}' gno-validator-gnoland 2>/dev/null)"
-	@echo ""
-	@echo "=== Binary Checksums (SHA-256) ==="
-	@echo "gnoland:           $$(docker run --rm --entrypoint sha256sum gno-validator-gnoland /usr/local/bin/gnoland | awk '{print $$1}')"
-	@echo "gnokey:            $$(docker run --rm --entrypoint sha256sum gno-validator-gnokms /usr/local/bin/gnokey | awk '{print $$1}')"
-	@echo "gnokms:            $$(docker run --rm --entrypoint sha256sum gno-validator-gnokms /usr/local/bin/gnokms | awk '{print $$1}')"
-	@echo ""
-	@echo "=== File Checksums (SHA-256) ==="
-	@if [ -f genesis.json ]; then \
-		if command -v sha256sum >/dev/null 2>&1; then \
-			echo "genesis.json:      $$(sha256sum genesis.json | awk '{print $$1}')"; \
-		else \
-			echo "genesis.json:      $$(shasum -a 256 genesis.json | awk '{print $$1}')"; \
-		fi; \
-	else \
-		echo "genesis.json:      (not found)"; \
-	fi
+up:
+	@$(SCRIPT) up
 
-build: ## Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
-	@GNO_REPO=$$(grep -E '^GNO_REPO=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	GNO_REPO=$${GNO_REPO:-gnolang/gno}; \
-	GNO_VERSION=$$(grep -E '^GNO_VERSION=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '); \
-	GNO_VERSION=$${GNO_VERSION:-master}; \
-	echo "Resolving commit hash for $${GNO_VERSION} on $${GNO_REPO}..."; \
-	GNO_COMMIT=$$(git ls-remote https://github.com/$${GNO_REPO}.git $${GNO_VERSION} 2>/dev/null | awk '{print $$1}'); \
-	if [ -z "$$GNO_COMMIT" ]; then \
-		echo "Warning: could not resolve $${GNO_VERSION} to a commit hash (no network or direct commit?), cache may be stale"; \
-		GNO_COMMIT=$$GNO_VERSION; \
-	fi; \
-	echo "Building gno@$${GNO_COMMIT:0:12} ($${GNO_VERSION} on $${GNO_REPO})"; \
-	export GNO_COMMIT_HASH=$$GNO_COMMIT; \
-	export BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
-	docker compose build
+down:
+	@$(SCRIPT) down
 
-up: ## Start all services
-	@test -f .env || (echo "Error: .env not found. Run: cp .env.example .env" && exit 1)
-	@if [ -z "$${GNOKMS_PASSWORD}" ] && ! grep -qE '^GNOKMS_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GNOKMS_PASSWORD: " GNOKMS_PASSWORD && echo "" && export GNOKMS_PASSWORD; \
-	fi; \
-	if [ -z "$${GRAFANA_ADMIN_PASSWORD}" ] && grep -qE '^GRAFANA_ADMIN_USER=.+' .env 2>/dev/null && ! grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GRAFANA_ADMIN_PASSWORD: " GRAFANA_ADMIN_PASSWORD && echo "" && export GRAFANA_ADMIN_PASSWORD; \
-	fi; \
-	if [ -z "$${GRAFANA_SMTP_PASSWORD}" ] && grep -qE '^GRAFANA_SMTP_ENABLED=true' .env 2>/dev/null && ! grep -qE '^GRAFANA_SMTP_PASSWORD=.+' .env 2>/dev/null; then \
-		read -s -p "GRAFANA_SMTP_PASSWORD: " GRAFANA_SMTP_PASSWORD && echo "" && export GRAFANA_SMTP_PASSWORD; \
-	fi; \
-	docker compose run --rm --no-deps -T gnokms check >/dev/null && \
-	docker compose up -d
+restart:
+	@$(SCRIPT) restart
 
-down: ## Stop and remove containers
-	docker compose down
+logs-gnoland:
+	@$(SCRIPT) logs-gnoland
 
-restart: ## Restart all services (does not re-read compose file; use 'make down && make up' after config changes)
-	docker compose restart
+logs-gnokms:
+	@$(SCRIPT) logs-gnokms
 
-logs-gnoland: ## Open interactive log TUI — downloads lnav on first run. Use SINCE=<duration> to control history (default: 1h)
-	@if $(MAKE) -s .lnav/bin/lnav; then \
-		TERM=xterm-256color .lnav/bin/lnav -I ./.lnav <(docker compose logs --since $${SINCE:-1h} -f gnoland 2>/dev/null); \
-	else \
-		echo "lnav unavailable, falling back to plain logs..."; \
-		docker compose logs --since $${SINCE:-1h} -f gnoland; \
-	fi
+logs-telemetry:
+	@$(SCRIPT) logs-telemetry
 
-logs-gnokms: ## Follow gnokms logs
-	docker compose logs -f gnokms
+status:
+	@$(SCRIPT) status
 
-logs-telemetry: ## Follow logs for all telemetry services
-	docker compose logs -f otelcol tempo prometheus grafana
+reset:
+	@$(SCRIPT) reset
 
-status: ## Show container status
-	docker compose ps
-
-reset: ## Reset node state: remove db and wal, reset priv_validator_state.json
-	@echo "WARNING: This will erase the node state. Ensure the node is stopped ('make down') first."
-	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
-	@echo "Resetting gnoland-data/db, gnoland-data/wal and gnoland-data/secrets/priv_validator_state.json"
-	@rm -rf gnoland-data/db gnoland-data/wal
-	@printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' > gnoland-data/secrets/priv_validator_state.json
-
-update: build up ## Rebuild images and restart (binary update)
+update:
+	@$(SCRIPT) update

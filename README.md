@@ -101,6 +101,7 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 | `make build`          | Rebuild Docker images                                               |
 | `make update`         | Rebuild images and restart (binary update)                          |
 | `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |
+| `make help`           | Show the target list                                                |
 
 > After editing `config.overrides`: run `make down && make up` to apply changes.
 
