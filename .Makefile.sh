@@ -258,6 +258,89 @@ install_lnav() {
     echo "lnav installed at ${LNAV_BIN}"
 }
 
+# ---- Lifecycle helpers
+
+# Create-and-start the containers from scratch. Used by cmd_start on first run,
+# and by cmd_update after cmd_down. Prompts for passwords if needed, validates
+# gnokms keystore, then runs `docker compose up -d`.
+_fresh_up() {
+    [[ -f "$ENV_FILE" ]] || {
+        echo "Error: .env not found. Run: cp .env.example .env" >&2
+        exit 1
+    }
+
+    prompt_password_if_unset GNOKMS_PASSWORD
+    if env_has_value GRAFANA_ADMIN_USER; then
+        prompt_password_if_unset GRAFANA_ADMIN_PASSWORD
+    fi
+    if env_matches GRAFANA_SMTP_ENABLED true; then
+        prompt_password_if_unset GRAFANA_SMTP_PASSWORD
+    fi
+
+    docker compose run --rm --no-deps -T gnokms check >/dev/null
+    docker compose up -d
+
+    cat <<'EOF'
+
+Started. The gnoland entrypoint regenerates config on every start:
+  1. resets gnoland-data/config/config.toml to defaults
+  2. applies user-defined overrides from ./config.overrides
+  3. applies hardcoded overrides (p2p.laddr, rpc.laddr, remote signer, telemetry)
+EOF
+}
+
+# Print a drift report comparing current filesystem state against the running
+# gnoland container and the images. Exits silently if no containers exist yet.
+drift_report() {
+    # Only makes sense if the gnoland container has been created at least once.
+    if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local cname="gno-validator-gnoland-1"
+    local -a needs_update=() needs_restart=()
+
+    # Build inputs (images): compare to image .Created.
+    if [[ -f Dockerfile ]] && file_newer_than_docker Dockerfile "$GNOLAND_IMAGE" .Created; then
+        needs_update+=("Dockerfile modified since gnoland image was built")
+    fi
+    if [[ -f docker/gnoland-entrypoint.sh ]] && file_newer_than_docker docker/gnoland-entrypoint.sh "$GNOLAND_IMAGE" .Created; then
+        needs_update+=("docker/gnoland-entrypoint.sh modified since image was built")
+    fi
+    if [[ -f docker/gnokms-entrypoint.sh ]] && file_newer_than_docker docker/gnokms-entrypoint.sh "$GNOKMS_IMAGE" .Created; then
+        needs_update+=("docker/gnokms-entrypoint.sh modified since gnokms image was built")
+    fi
+
+    # Runtime inputs: compare to container .Created.
+    if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
+        needs_update+=(".env modified since containers were created")
+    fi
+    if file_newer_than_docker docker-compose.yml "$cname" .Created; then
+        needs_update+=("docker-compose.yml modified since containers were created")
+    fi
+
+    # config.overrides re-applies on every container start.
+    if [[ -f "$OVERRIDES_FILE" ]] && file_newer_than_docker "$OVERRIDES_FILE" "$cname" .State.StartedAt; then
+        needs_restart+=("config.overrides modified since last container start — will be re-applied this start")
+    fi
+
+    if (( ${#needs_update[@]} > 0 )); then
+        echo "Drift detected (requires 'make update' to fully apply):"
+        local line
+        for line in "${needs_update[@]}"; do
+            echo "  - $line"
+        done
+        echo ""
+    fi
+    if (( ${#needs_restart[@]} > 0 )); then
+        local line
+        for line in "${needs_restart[@]}"; do
+            echo "Info: $line"
+        done
+        echo ""
+    fi
+}
+
 # ---- Commands
 
 cmd_gen_identity() {
