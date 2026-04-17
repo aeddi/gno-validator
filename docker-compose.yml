@@ -10,6 +10,8 @@ services:
                 GNO_REPO: ${GNO_REPO:-gnolang/gno}
                 GNO_COMMIT_HASH: ${GNO_COMMIT_HASH:-}
                 BUILD_DATE: ${BUILD_DATE:-}
+                DOCKERFILE_HASH: ${DOCKERFILE_HASH:-}
+                ENTRYPOINT_HASH: ${ENTRYPOINT_HASH:-}
         image: gno-validator-gnokms
         environment:
             GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
@@ -32,6 +34,8 @@ services:
                 GNO_REPO: ${GNO_REPO:-gnolang/gno}
                 GNO_COMMIT_HASH: ${GNO_COMMIT_HASH:-}
                 BUILD_DATE: ${BUILD_DATE:-}
+                DOCKERFILE_HASH: ${DOCKERFILE_HASH:-}
+                ENTRYPOINT_HASH: ${ENTRYPOINT_HASH:-}
         image: gno-validator-gnoland
         user: "${HOST_UID:-0}:${HOST_GID:-0}"
         environment:

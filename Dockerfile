@@ -23,10 +23,17 @@ ARG     GNO_COMMIT_HASH
 ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
 ARG     BUILD_DATE
+ARG     DOCKERFILE_HASH
+ARG     ENTRYPOINT_HASH
 LABEL   gno.commit="${GNO_COMMIT_HASH}" \
   gno.version="${GNO_VERSION}" \
   gno.repo="${GNO_REPO}" \
-  build.date="${BUILD_DATE}"
+  build.commit="${GNO_COMMIT_HASH}" \
+  build.version="${GNO_VERSION}" \
+  build.repo="${GNO_REPO}" \
+  build.date="${BUILD_DATE}" \
+  build.dockerfile_hash="${DOCKERFILE_HASH}" \
+  build.entrypoint_hash="${ENTRYPOINT_HASH}"
 
 RUN     apk add --no-cache ca-certificates
 
@@ -45,10 +52,17 @@ ARG     GNO_COMMIT_HASH
 ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
 ARG     BUILD_DATE
+ARG     DOCKERFILE_HASH
+ARG     ENTRYPOINT_HASH
 LABEL   gno.commit="${GNO_COMMIT_HASH}" \
   gno.version="${GNO_VERSION}" \
   gno.repo="${GNO_REPO}" \
-  build.date="${BUILD_DATE}"
+  build.commit="${GNO_COMMIT_HASH}" \
+  build.version="${GNO_VERSION}" \
+  build.repo="${GNO_REPO}" \
+  build.date="${BUILD_DATE}" \
+  build.dockerfile_hash="${DOCKERFILE_HASH}" \
+  build.entrypoint_hash="${ENTRYPOINT_HASH}"
 
 RUN     apk add --no-cache ca-certificates
 
