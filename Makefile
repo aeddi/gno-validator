@@ -4,7 +4,7 @@
 #
 # Targets:
 #   gen-identity             Generate the validator signing identity in the gnokms keystore
-#   print-infos              Print node identity, network config, build metadata, and SHA-256 checksums
+#   infos                    Print node identity, network config, build metadata, and SHA-256 checksums
 #   build                    Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
 #   up                       Start all services
 #   down                     Stop and remove containers
@@ -33,7 +33,7 @@ export HOST_GID := $(shell id -g)
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
-.PHONY: help gen-identity print-infos build up down restart \
+.PHONY: help gen-identity infos build up down restart \
         logs-gnoland logs-gnokms logs-telemetry status reset update
 
 help:
@@ -42,8 +42,8 @@ help:
 gen-identity:
 	@$(SCRIPT) gen-identity
 
-print-infos:
-	@$(SCRIPT) print-infos
+infos:
+	@$(SCRIPT) infos
 
 build:
 	@$(SCRIPT) build

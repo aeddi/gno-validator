@@ -6,7 +6,7 @@
 # also be run directly with `bash .Makefile.sh <command>` from the repo root.
 #
 # Usage: .Makefile.sh <command>
-# Commands: gen-identity, print-infos, build, up, down, restart, logs-gnoland,
+# Commands: gen-identity, infos, build, up, down, restart, logs-gnoland,
 #           logs-gnokms, logs-telemetry, status, reset, update
 
 set -euo pipefail
@@ -193,7 +193,7 @@ cmd_gen_identity() {
             add "$GNOKMS_KEYNAME" --home /gnokms-data/keystore --insecure-password-stdin
 }
 
-cmd_print_infos() {
+cmd_infos() {
     ensure_image "$GNOLAND_IMAGE" gnoland
     ensure_image "$GNOKMS_IMAGE" gnokms
     mkdir -p "${GNOLAND_DATA}/config" "${GNOLAND_DATA}/secrets"
@@ -344,7 +344,7 @@ shift
 
 case "$cmd" in
     gen-identity)   cmd_gen_identity ;;
-    print-infos)    cmd_print_infos ;;
+    infos)          cmd_infos ;;
     build)          cmd_build ;;
     up)             cmd_up ;;
     down)           cmd_down ;;

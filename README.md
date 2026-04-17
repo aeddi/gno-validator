@@ -58,7 +58,7 @@ Set the required fields:
 - `telemetry.service_name` — service identifier shown in Grafana (e.g. the chain ID)
 
 Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` on every
-node start and `make print-infos` run. Mandatory settings (remote signer, telemetry) are
+node start and `make infos` run. Mandatory settings (remote signer, telemetry) are
 applied after and override any conflicting entries. `config.overrides` is gitignored — it
 stays local to each operator.
 
@@ -97,7 +97,7 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 | `make logs-telemetry` | Follow logs for all telemetry services                                          |
 | `make status`         | Show container status                                               |
 | `make gen-identity`   | Generate the validator signing identity                             |
-| `make print-infos`    | Print node identity, network config, build metadata, and checksums  |
+| `make infos`          | Print node identity, network config, build metadata, and checksums  |
 | `make build`          | Rebuild Docker images                                               |
 | `make update`         | Rebuild images and restart (binary update)                          |
 | `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |
