@@ -631,6 +631,8 @@ cmd_update() {
 
     if (( force == 1 )); then
         reasons+=("force=1")
+        need_rebuild=1
+        need_recreate=1
     fi
 
     echo "Update will:"
