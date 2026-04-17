@@ -538,15 +538,44 @@ cmd_status() {
 }
 
 cmd_reset() {
-    echo "WARNING: This will erase the node state. Ensure the node is stopped ('make down') first."
-    local confirm
-    read -r -p "Are you sure? [y/N] " confirm
-    [[ "$confirm" == "y" ]] || exit 1
+    # Figure out current state of the gnoland container.
+    local was_running=0 exists=1
+    if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
+        exists=0
+    elif docker compose ps --status running -q gnoland 2>/dev/null | grep -q .; then
+        was_running=1
+    fi
 
-    echo "Resetting ${GNOLAND_DATA}/db, ${GNOLAND_DATA}/wal and ${GNOLAND_DATA}/secrets/priv_validator_state.json"
+    echo "About to reset chain state."
+    echo "  Will delete: ${GNOLAND_DATA}/db, ${GNOLAND_DATA}/wal"
+    echo "  Will reset : ${GNOLAND_DATA}/secrets/priv_validator_state.json"
+    echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config, grafana data"
+
+    local confirm
+    read -r -p "Continue? [y/N] " confirm
+    [[ "$confirm" == "y" || "$confirm" == "Y" ]] || { echo "Aborted."; exit 1; }
+
+    if (( was_running == 1 )); then
+        read -r -p "Containers are running — stop them first? [Y/n] " confirm
+        if [[ "$confirm" != "n" && "$confirm" != "N" ]]; then
+            cmd_stop
+        else
+            echo "Warning: resetting while containers run may corrupt data. Proceeding anyway."
+        fi
+    fi
+
+    echo "Resetting..."
     rm -rf "${GNOLAND_DATA}/db" "${GNOLAND_DATA}/wal"
     printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' \
         > "${GNOLAND_DATA}/secrets/priv_validator_state.json"
+    echo "Reset complete."
+
+    if (( was_running == 1 )); then
+        read -r -p "Start containers again? [Y/n] " confirm
+        if [[ "$confirm" != "n" && "$confirm" != "N" ]]; then
+            cmd_start
+        fi
+    fi
 }
 
 cmd_update() {
