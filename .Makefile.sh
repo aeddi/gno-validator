@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # .Makefile.sh — shell backend for the gno-validator Makefile.
 #
-# Holds every operational command (build, up, down, gen-identity, ...) so the
+# Holds every operational command (build, start, stop, gen-identity, ...) so the
 # Makefile stays a thin dispatcher. Normally invoked as `make <target>`; can
 # also be run directly with `bash .Makefile.sh <command>` from the repo root.
 #
 # Usage: .Makefile.sh <command>
-# Commands: gen-identity, infos, build, up, down, restart, logs-gnoland,
+# Commands: gen-identity, infos, build, start, stop, restart, logs-gnoland,
 #           logs-gnokms, logs-telemetry, status, reset, update
 
 set -euo pipefail
@@ -261,7 +261,7 @@ install_lnav() {
 # ---- Lifecycle helpers
 
 # Create-and-start the containers from scratch. Used by cmd_start on first run,
-# and by cmd_update after cmd_down. Prompts for passwords if needed, validates
+# and by cmd_update after cmd_stop. Prompts for passwords if needed, validates
 # gnokms keystore, then runs `docker compose up -d`.
 _fresh_up() {
     [[ -f "$ENV_FILE" ]] || {
@@ -480,33 +480,38 @@ cmd_build() {
     fi
 }
 
-cmd_up() {
-    [[ -f "$ENV_FILE" ]] || {
-        echo "Error: .env not found. Run: cp .env.example .env" >&2
-        exit 1
-    }
-
-    prompt_password_if_unset GNOKMS_PASSWORD
-    if env_has_value GRAFANA_ADMIN_USER; then
-        prompt_password_if_unset GRAFANA_ADMIN_PASSWORD
+cmd_start() {
+    # If the gnoland container has never been created, treat this as first-run:
+    # ensure images exist, then _fresh_up. Users shouldn't need a separate
+    # `make up` on a fresh checkout.
+    if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
+        echo "First run: no gnoland container found. Ensuring images..."
+        cmd_build
+        echo ""
+        echo "Creating and starting containers..."
+        _fresh_up
+        return
     fi
-    if env_matches GRAFANA_SMTP_ENABLED true; then
-        prompt_password_if_unset GRAFANA_SMTP_PASSWORD
+
+    # Running → nothing to do (except surface drift).
+    if docker compose ps --status running -q gnoland 2>/dev/null | grep -q .; then
+        echo "Containers already running."
+        drift_report
+        return
     fi
 
-    # Validate the keystore/password up front: a wrong password would only
-    # surface later as a gnokms crash loop, which is much harder to diagnose.
-    docker compose run --rm --no-deps -T gnokms check >/dev/null
-    docker compose up -d
+    drift_report
+    echo "Starting containers (config will be regenerated from config.overrides)..."
+    docker compose start
 }
 
-cmd_down() {
-    docker compose down
+cmd_stop() {
+    docker compose stop
 }
 
 cmd_restart() {
-    cmd_down
-    cmd_up
+    cmd_stop
+    cmd_start
 }
 
 cmd_logs_gnoland() {
@@ -546,7 +551,7 @@ cmd_reset() {
 
 cmd_update() {
     cmd_build
-    cmd_up
+    _fresh_up
 }
 
 # ---- Dispatch
@@ -563,8 +568,8 @@ case "$cmd" in
     gen-identity)   cmd_gen_identity ;;
     infos)          cmd_infos ;;
     build)          cmd_build ;;
-    up)             cmd_up ;;
-    down)           cmd_down ;;
+    start)          cmd_start ;;
+    stop)           cmd_stop ;;
     restart)        cmd_restart ;;
     logs-gnoland)   cmd_logs_gnoland ;;
     logs-gnokms)    cmd_logs_gnokms ;;
