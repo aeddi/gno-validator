@@ -579,7 +579,94 @@ cmd_reset() {
 }
 
 cmd_update() {
-    cmd_build
+    local force="${FORCE:-0}"
+    local cname="gno-validator-gnoland-1"
+
+    # Decide what needs to happen.
+    local need_rebuild=0 need_recreate=0
+    local -a reasons=()
+
+    # Determine current commit (same logic as cmd_build).
+    local repo version commit
+    repo="$(env_get GNO_REPO gnolang/gno)"
+    version="$(env_get GNO_VERSION master)"
+    commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1 || true)"
+    commit="${commit:-$version}"
+
+    # Check image drift (build inputs).
+    export GNO_REPO="$repo" GNO_VERSION="$version" GNO_COMMIT_HASH="$commit"
+    export DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
+    if image_needs_rebuild "$GNOKMS_IMAGE" gnokms 2>/dev/null; then
+        need_rebuild=1
+        reasons+=("gnokms image out of date")
+    fi
+    if image_needs_rebuild "$GNOLAND_IMAGE" gnoland 2>/dev/null; then
+        need_rebuild=1
+        reasons+=("gnoland image out of date")
+    fi
+
+    # Check runtime drift (recreate triggers).
+    if docker container inspect "$cname" >/dev/null 2>&1; then
+        if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
+            need_recreate=1
+            reasons+=(".env modified since containers were created")
+        fi
+        if file_newer_than_docker docker-compose.yml "$cname" .Created; then
+            need_recreate=1
+            reasons+=("docker-compose.yml modified since containers were created")
+        fi
+    else
+        # No container yet — recreate implicitly happens via _fresh_up.
+        need_recreate=1
+        reasons+=("containers not yet created")
+    fi
+
+    # If a rebuild is needed we always recreate too (new image → new container).
+    (( need_rebuild == 1 )) && need_recreate=1
+
+    if (( need_rebuild == 0 && need_recreate == 0 && force == 0 )); then
+        echo "Already up to date (pass force=1 to recreate anyway)."
+        return 0
+    fi
+
+    if (( force == 1 )); then
+        reasons+=("force=1")
+    fi
+
+    echo "Update will:"
+    (( need_rebuild == 1 )) && echo "  - rebuild images"
+    (( need_recreate == 1 )) && echo "  - stop and recreate containers (container logs will be lost)"
+    echo ""
+    echo "Reasons:"
+    local r
+    for r in "${reasons[@]}"; do
+        echo "  - $r"
+    done
+    echo ""
+    echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, keys, config), ${GNOKMS_DATA}/ (keystore),"
+    echo "           genesis.json, and named volumes (grafana_data, gnokms-sock)."
+    echo ""
+
+    if (( force == 0 )); then
+        local confirm
+        read -r -p "Continue? [Y/n] " confirm
+        if [[ "$confirm" == "n" || "$confirm" == "N" ]]; then
+            echo "Aborted."; exit 1
+        fi
+    fi
+
+    if (( need_rebuild == 1 )); then
+        cmd_build
+        echo ""
+    fi
+
+    if docker container inspect "$cname" >/dev/null 2>&1; then
+        echo "Stopping and removing containers..."
+        docker compose down
+        echo ""
+    fi
+
+    echo "Creating and starting containers..."
     _fresh_up
 }
 
