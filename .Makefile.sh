@@ -337,19 +337,63 @@ cmd_build() {
     version="$(env_get GNO_VERSION master)"
 
     echo "Resolving commit hash for ${version} on ${repo}..."
-    # Pin the build to an immutable commit so Docker's layer cache keys off the
-    # commit hash and not the branch ref (branches are cache-unfriendly because
-    # they move but the cache can't tell).
     commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1)"
     if [[ -z "$commit" ]]; then
         echo "Warning: could not resolve ${version} to a commit hash (no network or direct commit?), cache may be stale"
         commit="$version"
     fi
-    echo "Building gno@${commit:0:12} (${version} on ${repo})"
 
+    # Export so image_input_hashes, compose, and the Dockerfile ARGs all see the same values.
+    export GNO_REPO="$repo"
+    export GNO_VERSION="$version"
     export GNO_COMMIT_HASH="$commit"
     export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    docker compose build
+    export DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
+
+    # Decide per-image whether a rebuild is needed.
+    local force="${FORCE:-0}" gnokms_needs gnoland_needs
+    if [[ "$force" == "1" ]]; then
+        echo "FORCE=1 → rebuilding both images."
+        gnokms_needs=1; gnoland_needs=1
+    else
+        echo "Build inputs:"
+        echo "  repo=${repo}  version=${version}  commit=${commit:0:12}"
+        echo "  dockerfile sha256=${DOCKERFILE_HASH:0:12}"
+        echo ""
+        echo "Comparing with existing image labels..."
+        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
+        if image_needs_rebuild "$GNOKMS_IMAGE" gnokms; then
+            gnokms_needs=1
+        else
+            gnokms_needs=0
+            echo "  gnokms: up to date"
+        fi
+        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
+        if image_needs_rebuild "$GNOLAND_IMAGE" gnoland; then
+            gnoland_needs=1
+        else
+            gnoland_needs=0
+            echo "  gnoland: up to date"
+        fi
+        echo ""
+    fi
+
+    if (( gnokms_needs == 0 && gnoland_needs == 0 )); then
+        echo "Nothing to rebuild (pass force=1 to rebuild anyway)."
+        return 0
+    fi
+
+    # Build each image with its own entrypoint-hash label.
+    if (( gnokms_needs == 1 )); then
+        echo "==> Building gnokms image..."
+        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
+        docker compose build gnokms
+    fi
+    if (( gnoland_needs == 1 )); then
+        echo "==> Building gnoland image..."
+        export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
+        docker compose build gnoland
+    fi
 }
 
 cmd_up() {
