@@ -91,7 +91,7 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 | --------------------- | ------------------------------------------------------------------- |
 | `make up`             | Start all services                                                  |
 | `make down`           | Stop and remove containers                                          |
-| `make restart`        | Quick restart (does not reload compose file)                        |
+| `make restart`        | Stop and start all services (re-reads compose file)                 |
 | `make logs-gnoland`   | Open interactive log TUI (level filter + search) — downloads lnav on first run |
 | `make logs-gnokms`    | Follow gnokms logs                                                              |
 | `make logs-telemetry` | Follow logs for all telemetry services                                          |
@@ -103,7 +103,7 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 | `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |
 | `make help`           | Show the target list                                                |
 
-> After editing `config.overrides`: run `make down && make up` to apply changes.
+> After editing `config.overrides`: run `make restart` to apply changes.
 
 ## Architecture
 

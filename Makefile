@@ -8,7 +8,7 @@
 #   build                    Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
 #   up                       Start all services
 #   down                     Stop and remove containers
-#   restart                  Restart all services (does not re-read compose file; use 'make down && make up' after config changes)
+#   restart                  Stop and start all services (re-reads compose file and applies config changes)
 #   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default history: 1h)
 #   logs-gnokms              Follow gnokms logs
 #   logs-telemetry           Follow logs for all telemetry services

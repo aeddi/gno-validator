@@ -289,7 +289,8 @@ cmd_down() {
 }
 
 cmd_restart() {
-    docker compose restart
+    cmd_down
+    cmd_up
 }
 
 cmd_logs_gnoland() {
