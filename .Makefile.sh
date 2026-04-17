@@ -162,6 +162,53 @@ image_needs_rebuild() {
     return $((drift == 0))
 }
 
+# ---- Drift helpers
+
+# Print a file's mtime as epoch seconds. Handles GNU (stat -c) and BSD (stat -f).
+# Prints 0 if the file is missing (so callers treat it as "always newer").
+mtime_epoch() {
+    [[ -e "$1" ]] || { echo 0; return; }
+    if stat --version >/dev/null 2>&1; then
+        stat -c %Y "$1"
+    else
+        stat -f %m "$1"
+    fi
+}
+
+# Convert a Docker ISO-8601 timestamp ('2026-04-14T14:39:21.555Z' or with offset)
+# to epoch seconds. Prints 0 if parsing fails (safer default: treat as 'very old').
+iso_to_epoch() {
+    local iso="$1"
+    [[ -n "$iso" ]] || { echo 0; return; }
+    # Strip fractional seconds and offset/zulu for BSD date compatibility.
+    local normalized="${iso%%.*}"
+    normalized="${normalized%%+*}"
+    normalized="${normalized%Z}"
+    if date --version >/dev/null 2>&1; then
+        date -u -d "${normalized}Z" +%s 2>/dev/null || echo 0
+    else
+        date -u -j -f "%Y-%m-%dT%H:%M:%S" "$normalized" +%s 2>/dev/null || echo 0
+    fi
+}
+
+# Print the epoch time (seconds) of a Docker format path, e.g. `.Created` on the image.
+# Args: <image-or-container> <go-template-path>. Prints 0 on failure.
+docker_time_epoch() {
+    local ref="$1" path="$2" iso
+    iso="$(docker inspect --format "{{${path}}}" "$ref" 2>/dev/null || true)"
+    iso_to_epoch "$iso"
+}
+
+# True if FILE has been modified after the given docker time.
+# Args: <file> <docker-ref> <go-template-path>
+file_newer_than_docker() {
+    local file="$1" ref="$2" path="$3"
+    local file_mtime docker_mtime
+    file_mtime="$(mtime_epoch "$file")"
+    docker_mtime="$(docker_time_epoch "$ref" "$path")"
+    (( file_mtime > docker_mtime ))
+}
+
 # ---- lnav installer
 
 # Fetch the pinned lnav release into $LNAV_BIN if missing. Returns non-zero if
