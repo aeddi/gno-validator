@@ -2,19 +2,30 @@
 #
 # Usage: make <target> [args]
 #
-# Targets:
-#   gen-identity             Generate the validator signing identity in the gnokms keystore
-#   infos                    Print node identity, network config, build metadata, and SHA-256 checksums
-#   build                    Build Docker images (uses cache; rebuilds automatically when a new commit is available on the target branch)
-#   up                       Start all services
-#   down                     Stop and remove containers
-#   restart                  Stop and start all services (re-reads compose file and applies config changes)
-#   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default history: 1h)
+# Lifecycle:
+#   start                    Start services (first run: builds images if needed,
+#                            generates config, and creates containers)
+#   stop                     Stop services without removing containers
+#   restart                  Stop then start (re-applies config.overrides, no password prompt)
+#   update   [force=1]       Rebuild images and/or recreate containers if anything
+#                            has changed since the last build/start. force=1 does it anyway.
+#                            Recreate loses container logs but preserves chain data + keystore.
+#   reset                    Wipe chain state (db, wal, priv_validator_state.json) with
+#                            interactive prompts to stop/start containers around the reset.
+#
+# Build (usually automatic via start/update; run manually for CI or debugging):
+#   build    [force=1]       Build missing images; skip images whose labels match the
+#                            current build inputs (commit, Dockerfile, entrypoints).
+#
+# Inspection:
+#   infos                    Print node identity, network config, build metadata, checksums
+#   status                   Show container status
+#   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default: 1h)
 #   logs-gnokms              Follow gnokms logs
 #   logs-telemetry           Follow logs for all telemetry services
-#   status                   Show container status
-#   reset                    Reset node state: remove db and wal, reset priv_validator_state.json
-#   update                   Rebuild images and restart (binary update)
+#
+# Other:
+#   gen-identity             Generate the validator signing identity in the gnokms keystore
 #   help                     Show this help message
 #
 # Configuration:
@@ -28,13 +39,14 @@ SHELL := /bin/bash
 export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
-# All operational logic lives in .Makefile.sh for readability and reuse.
-# The Makefile is a thin dispatcher around it.
+# force=1 on the make command line flips FORCE=1 in the script env.
+export FORCE := $(force)
+
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
-.PHONY: help gen-identity infos build up down restart \
-        logs-gnoland logs-gnokms logs-telemetry status reset update
+.PHONY: help gen-identity infos build start stop restart update reset \
+        logs-gnoland logs-gnokms logs-telemetry status
 
 help:
 	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
@@ -48,14 +60,20 @@ infos:
 build:
 	@$(SCRIPT) build
 
-up:
-	@$(SCRIPT) up
+start:
+	@$(SCRIPT) start
 
-down:
-	@$(SCRIPT) down
+stop:
+	@$(SCRIPT) stop
 
 restart:
 	@$(SCRIPT) restart
+
+update:
+	@$(SCRIPT) update
+
+reset:
+	@$(SCRIPT) reset
 
 logs-gnoland:
 	@$(SCRIPT) logs-gnoland
@@ -68,9 +86,3 @@ logs-telemetry:
 
 status:
 	@$(SCRIPT) status
-
-reset:
-	@$(SCRIPT) reset
-
-update:
-	@$(SCRIPT) update
