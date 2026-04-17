@@ -277,6 +277,8 @@ _fresh_up() {
         prompt_password_if_unset GRAFANA_SMTP_PASSWORD
     fi
 
+    # Validate the keystore/password up front: a wrong password would only
+    # surface later as a gnokms crash loop, which is much harder to diagnose.
     docker compose run --rm --no-deps -T gnokms check >/dev/null
     docker compose up -d
 
