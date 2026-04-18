@@ -372,18 +372,27 @@ cmd_infos() {
     mkdir -p "${GNOLAND_DATA}/config" "${GNOLAND_DATA}/secrets"
 
     echo "=== Identity ==="
-    docker run --rm \
+    # `gnokey list` can briefly fail with a keystore DB lock when gnokms is
+    # actively signing. Capture output separately and tolerate the failure so
+    # the rest of `infos` still prints — the operator can retry for identity.
+    local gnokey_out
+    gnokey_out="$(docker run --rm \
         --entrypoint gnokey \
         -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
         "$GNOKMS_IMAGE" \
-        list --home /gnokms-data/keystore \
-    | awk '{
-        for (i = 1; i <= NF; i++) {
-            if ($i == "addr:") addr = $(i+1)
-            if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
-        }
-        print "validator address: " addr "\nvalidator pub_key: " pub
-    }'
+        list --home /gnokms-data/keystore 2>/dev/null || true)"
+    if [[ -n "$gnokey_out" ]]; then
+        echo "$gnokey_out" | awk '{
+            for (i = 1; i <= NF; i++) {
+                if ($i == "addr:") addr = $(i+1)
+                if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
+            }
+            print "validator address: " addr "\nvalidator pub_key: " pub
+        }'
+    else
+        echo "validator address: (gnokey list failed — keystore locked by running gnokms; retry shortly)"
+        echo "validator pub_key: (gnokey list failed — keystore locked by running gnokms; retry shortly)"
+    fi
     echo "node_id:           $(gnoland_run gnoland secrets get node_id.id --raw)"
     echo "moniker:           $(gnoland_run gnoland config get moniker --raw)"
     echo ""
