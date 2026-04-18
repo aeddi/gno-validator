@@ -19,7 +19,7 @@ cp .env.example .env
 
 Edit `.env` and set:
 
-- `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make up` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
+- `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make start` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
 - `GNO_REPO` — GitHub repo slug to clone gno sources from (default: `gnolang/gno`)
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
@@ -73,11 +73,13 @@ cp /path/to/genesis.json .
 ### 5. Start
 
 ```sh
-make up
+make start
 ```
 
-On first start, secrets and config are created automatically. Config is re-initialized on
-every start to ensure a clean state, with overrides applied on top.
+On first start, images are built, secrets and config are created, and containers come
+up. On every subsequent start, gnoland's config is regenerated from scratch and
+`config.overrides` is re-applied — so edits to `config.overrides` take effect after a
+`make restart`.
 
 ### 6. Open Grafana
 
@@ -87,23 +89,49 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 
 ## Operations
 
-| Command               | Description                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| `make up`             | Start all services                                                  |
-| `make down`           | Stop and remove containers                                          |
-| `make restart`        | Stop and start all services (re-reads compose file)                 |
-| `make logs-gnoland`   | Open interactive log TUI (level filter + search) — downloads lnav on first run |
-| `make logs-gnokms`    | Follow gnokms logs                                                              |
-| `make logs-telemetry` | Follow logs for all telemetry services                                          |
-| `make status`         | Show container status                                               |
-| `make gen-identity`   | Generate the validator signing identity                             |
-| `make infos`          | Print node identity, network config, build metadata, and checksums  |
-| `make build`          | Rebuild Docker images                                               |
-| `make update`         | Rebuild images and restart (binary update)                          |
-| `make reset`          | Reset node state (removes db/wal, resets priv_validator_state.json) |
-| `make help`           | Show the target list                                                |
+### Lifecycle
 
-> After editing `config.overrides`: run `make restart` to apply changes.
+| Command                 | What it does                                                                  | Cost                                              |
+| ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| `make start`            | First run: builds images + creates containers. Otherwise resumes stopped containers. | Free after first run.                         |
+| `make stop`             | Stops services but keeps containers (no recreate).                            | Free.                                             |
+| `make restart`          | `stop` + `start`. Re-applies `config.overrides` on the way up.                | Free. No password prompt.                         |
+| `make update [force=1]` | Rebuilds images if build inputs changed, recreates containers if `.env` / `docker-compose.yml` changed. `force=1` does both unconditionally. | Rebuild minutes; recreate wipes container logs. |
+| `make reset`            | Wipes chain state (`db`, `wal`, `priv_validator_state.json`). Prompts to stop and restart around the wipe. Preserves keystore, validator keys, node_id, and Grafana data. | Destructive on chain DB. |
+
+### Build (rarely needed manually)
+
+| Command                 | What it does                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `make build [force=1]`  | Builds images whose labels don't match the current commit / Dockerfile / entrypoint. `force=1` rebuilds anyway. `start` and `update` call this automatically. |
+
+### Inspection
+
+| Command                 | What it does                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `make status`           | Container status (`docker compose ps`).                                       |
+| `make infos`            | Validator identity, network config, build metadata, binary checksums.         |
+| `make logs-gnoland`     | Interactive log TUI (lnav). `SINCE=<duration>` controls history (default 1h). |
+| `make logs-gnokms`      | Follow gnokms logs.                                                           |
+| `make logs-telemetry`   | Follow otelcol / tempo / prometheus / grafana logs.                           |
+
+### Setup
+
+| Command                 | What it does                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `make gen-identity`     | Generate the validator signing identity in the gnokms keystore.               |
+| `make help`             | Show the target list.                                                         |
+
+### Change → command cheat sheet
+
+| You edited…                                    | Minimum command |
+| ---------------------------------------------- | --------------- |
+| `config.overrides`                             | `make restart`  |
+| `.env`, `docker-compose.yml`                   | `make update`   |
+| `Dockerfile`, `docker/*-entrypoint.sh`         | `make update`   |
+| Upstream `GNO_VERSION` branch moved            | `make update`   |
+
+> `make update` prompts before recreating — pass `force=1` to skip the prompt.
 
 ## Architecture
 
@@ -121,11 +149,11 @@ The keystore is encrypted with `GNOKMS_PASSWORD`. In production, **do not store 
 
 If the password is written to `.env`, an attacker who dumps the disk (via snapshot, backup exfiltration, or physical access) gets both the encrypted keystore and the key to decrypt it. Keeping the password only in RAM means disk access alone is not enough.
 
-**Recommended approach:** leave `GNOKMS_PASSWORD` unset and let `make up` / `make update` prompt you interactively at startup. The password is then held only in memory for the lifetime of the process.
+**Recommended approach:** leave `GNOKMS_PASSWORD` unset and let `make start` / `make update` prompt you interactively at startup. The password is then held only in memory for the lifetime of the process.
 
 **If you must inject the password non-interactively** (e.g. in a supervised init system), pass it as a runtime environment variable rather than persisting it to a file. Be aware that this still exposes the password in `/proc/<pid>/environ` and potentially in shell history — use a secrets manager or a systemd `EnvironmentFile` with `0600` permissions and consider whether the trade-off is acceptable for your threat model.
 
-`GRAFANA_ADMIN_PASSWORD` and `GRAFANA_SMTP_PASSWORD` carry less sensitive material but follow the same principle: leaving them unset causes `make up` / `make update` to prompt for them at startup, keeping them out of any file on disk.
+`GRAFANA_ADMIN_PASSWORD` and `GRAFANA_SMTP_PASSWORD` carry less sensitive material but follow the same principle: leaving them unset causes `make start` / `make update` to prompt for them at startup, keeping them out of any file on disk.
 
 ## Logging
 
@@ -142,7 +170,7 @@ GRAFANA_ADMIN_USER=your-username
 GRAFANA_ADMIN_PASSWORD=your-password
 ```
 
-If `GRAFANA_ADMIN_USER` is set but `GRAFANA_ADMIN_PASSWORD` is not, `make up` and `make update` will prompt for the password at startup — see [Password security](#password-security).
+If `GRAFANA_ADMIN_USER` is set but `GRAFANA_ADMIN_PASSWORD` is not, `make start` and `make update` will prompt for the password at startup — see [Password security](#password-security).
 
 Admin credentials are required to configure alerting contact points and manage users.
 
