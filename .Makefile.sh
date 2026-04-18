@@ -646,7 +646,13 @@ cmd_update() {
 
     echo "Update will:"
     (( need_rebuild == 1 )) && echo "  - rebuild images"
-    (( need_recreate == 1 )) && echo "  - stop and recreate containers (container logs will be lost)"
+    if (( need_recreate == 1 )); then
+        if docker container inspect "$cname" >/dev/null 2>&1; then
+            echo "  - stop and recreate containers (container logs will be lost)"
+        else
+            echo "  - create containers"
+        fi
+    fi
     echo ""
     echo "Reasons:"
     local r
