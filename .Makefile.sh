@@ -482,8 +482,8 @@ cmd_build() {
 
 cmd_start() {
     # If the gnoland container has never been created, treat this as first-run:
-    # ensure images exist, then _fresh_up. Users shouldn't need a separate
-    # `make up` on a fresh checkout.
+    # ensure images exist, then _fresh_up. Keeps `make start` the only command
+    # an operator needs on a fresh checkout.
     if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
         echo "First run: no gnoland container found. Ensuring images..."
         cmd_build

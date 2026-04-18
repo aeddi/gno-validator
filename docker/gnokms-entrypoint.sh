@@ -5,7 +5,7 @@ KEYSTORE="/gnokms-data/keystore"
 
 # ---- Check GNOKMS_PASSWORD is set
 if [ -z "$GNOKMS_PASSWORD" ]; then
-  printf "Error: GNOKMS_PASSWORD is not set. Set it in .env or use 'make up' to be prompted.\n" >&2
+  printf "Error: GNOKMS_PASSWORD is not set. Set it in .env or use 'make start' to be prompted.\n" >&2
   exit 1
 fi
 
