@@ -889,6 +889,44 @@ cmd_reset() {
   fi
 }
 
+cmd_clean_imgs() {
+  local skip_prompt="${YES:-0}"
+  # Collect all image tags for our two repositories. Matches e.g.
+  # gno-validator-gnokms:latest, gno-validator-gnokms:abc123-def456.
+  local -a images=()
+  local line
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && images+=("$line")
+  done < <(docker images --format '{{.Repository}}:{{.Tag}}' \
+    "$GNOKMS_IMAGE" "$GNOLAND_IMAGE" 2>/dev/null | sort -u)
+
+  if ((${#images[@]} == 0)); then
+    echo "No gno-validator images to remove."
+    return 0
+  fi
+
+  echo "Will remove the following images:"
+  local i
+  for i in "${images[@]:-}"; do
+    echo "  - $i"
+  done
+  echo ""
+  echo "Note: containers using these images must be stopped first."
+  echo ""
+
+  if ((skip_prompt != 1)); then
+    local confirm
+    read -r -p "Continue? [y/N] " confirm || true
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+      echo "Aborted."
+      exit 1
+    fi
+  fi
+
+  docker rmi -f "${images[@]}"
+  echo "Removed ${#images[@]} image(s)."
+}
+
 cmd_update() {
   local force="${FORCE:-0}"
   local cname="gno-validator-gnoland-1"
@@ -1021,6 +1059,7 @@ logs-gnokms) cmd_logs_gnokms ;;
 logs-telemetry) cmd_logs_telemetry ;;
 status) cmd_status ;;
 reset) cmd_reset ;;
+clean-imgs) cmd_clean_imgs ;;
 update) cmd_update ;;
 *)
   echo "Error: unknown command '${cmd}'." >&2
