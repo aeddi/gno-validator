@@ -497,8 +497,13 @@ drift_report() {
   export GNO_REPO="$repo" GNO_VERSION="$version" GNO_COMMIT_HASH="$commit"
 
   # Build-state drift (covers commit/version/repo + content hashes).
-  local summary has_drift=0
-  if eval "$(read_build_state_as_prev 2>/dev/null)"; then
+  # Capture read_build_state_as_prev's exit status via the assignment — if the
+  # state file is missing, the assignment itself returns non-zero and the `if`
+  # is skipped. Using `if eval "$(...)"; then` would always succeed (eval "" is
+  # 0) and we'd mis-report drift on a missing state file.
+  local prev_state summary has_drift=0
+  if prev_state="$(read_build_state_as_prev 2>/dev/null)"; then
+    eval "$prev_state"
     summary="$(build_state_drift_summary)" || has_drift=$?
     if ((has_drift == 1)); then
       echo "Drift detected since last build (${PREV_BUILD_DATE:-unknown}):"
@@ -632,8 +637,14 @@ cmd_build() {
   if [[ "$force" != "1" ]]; then
     # Skip if .build-state matches current inputs AND both content-tagged
     # images exist locally.
-    local prev_ok=0
-    if eval "$(read_build_state_as_prev 2>/dev/null)"; then prev_ok=1; fi
+    local prev_state prev_ok=0
+    # Capture command-sub exit via the assignment; `if eval "$(...)"; then`
+    # would always succeed (eval "" returns 0) and we'd try to match PREV_*
+    # values that were never loaded.
+    if prev_state="$(read_build_state_as_prev 2>/dev/null)"; then
+      eval "$prev_state"
+      prev_ok=1
+    fi
     if ((prev_ok == 1)); then
       local curr_gnokms curr_gnoland
       curr_gnokms="$(content_hash_for gnokms)"
