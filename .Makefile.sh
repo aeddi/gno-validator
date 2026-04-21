@@ -750,7 +750,89 @@ cmd_logs_telemetry() {
 }
 
 cmd_status() {
-  _compose ps
+  local watch_interval="${WATCH:-}"
+  local rpc_port
+  rpc_port="$(env_get GNOLAND_RPC_PORT 26657)"
+
+  # Without jq we can't parse RPC JSON — offer a raw-JSON dump degrade path.
+  local jq_bin
+  if ! jq_bin="$(ensure_jq 2>/dev/null)"; then
+    echo "Warning: jq unavailable (auto-install failed). Watch mode disabled; printing raw JSON once." >&2
+    _status_raw "$rpc_port"
+    return 0
+  fi
+
+  if [[ -z "$watch_interval" ]]; then
+    _status_render "$rpc_port" "$jq_bin"
+    return 0
+  fi
+
+  # Watch mode — hide cursor, clear screen, loop with ANSI redraw.
+  local eol=$'\033[K'
+  printf '\033[?25l'
+  trap 'printf "\033[?25h\n"' EXIT INT TERM
+  printf '\033[2J'
+  while true; do
+    printf '\033[H'
+    printf "Refreshing every %ss (Ctrl+C to stop)${eol}\n\n" "$watch_interval"
+    _status_render "$rpc_port" "$jq_bin" "$eol"
+    sleep "$watch_interval"
+  done
+}
+
+# Render a one-row status table. `eol` is optional; in watch mode, pass
+# $'\033[K' so shorter values don't leave stale characters.
+_status_render() {
+  local port="$1" jq="$2" eol="${3:-}"
+  local moniker status_json net_json height block peers catching_up vp status validator
+
+  status_json="$(_http_get "http://localhost:${port}/status" || true)"
+  net_json="$(_http_get "http://localhost:${port}/net_info" || true)"
+
+  printf "%-16s %-10s %-8s %-24s %-7s %s${eol}\n" "Node" "Status" "Height" "Latest Block" "Peers" "Validator"
+  printf "%-16s %-10s %-8s %-24s %-7s %s${eol}\n" "----" "------" "------" "------------" "-----" "---------"
+
+  if [[ -z "$status_json" ]]; then
+    printf "%-16s %-10s %-8s %-24s %-7s %s${eol}\n" "-" "unreachable" "-" "-" "-" "-"
+    return
+  fi
+
+  moniker="$(echo "$status_json" | "$jq" -r '.result.node_info.moniker // "-"' 2>/dev/null || echo "-")"
+  height="$(echo "$status_json" | "$jq" -r '.result.sync_info.latest_block_height // "-"' 2>/dev/null || echo "-")"
+  block="$(echo "$status_json" | "$jq" -r '.result.sync_info.latest_block_time // "-"' 2>/dev/null | cut -c1-19)"
+  catching_up="$(echo "$status_json" | "$jq" -r '.result.sync_info.catching_up // false' 2>/dev/null || echo "false")"
+  vp="$(echo "$status_json" | "$jq" -r '.result.validator_info.voting_power // "0"' 2>/dev/null || echo "0")"
+  peers="$(echo "$net_json" | "$jq" -r '.result.n_peers // "-"' 2>/dev/null || echo "-")"
+
+  if [[ "$catching_up" == "true" ]]; then status="syncing"; else status="running"; fi
+  if [[ "$vp" == "0" || -z "$vp" ]]; then validator="no"; else validator="yes (VP ${vp})"; fi
+
+  printf "%-16s %-10s %-8s %-24s %-7s %s${eol}\n" "$moniker" "$status" "$height" "$block" "$peers" "$validator"
+}
+
+# Degraded fallback: dump raw JSON from /status and /net_info (no parsing).
+_status_raw() {
+  local port="$1"
+  local s n
+  s="$(_http_get "http://localhost:${port}/status" || echo "{}")"
+  n="$(_http_get "http://localhost:${port}/net_info" || echo "{}")"
+  echo "=== /status ==="
+  echo "$s"
+  echo ""
+  echo "=== /net_info ==="
+  echo "$n"
+}
+
+# HTTP GET with curl→wget fallback. 2s timeout. Returns non-zero on failure.
+_http_get() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sf --max-time 2 "$url" 2>/dev/null
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- --timeout=2 "$url" 2>/dev/null
+  else
+    return 1
+  fi
 }
 
 cmd_reset() {
