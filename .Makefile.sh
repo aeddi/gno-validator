@@ -785,6 +785,15 @@ cmd_build() {
   echo "  ${GNOKMS_IMAGE}:${gnokms_tag}"
   echo "  ${GNOLAND_IMAGE}:${gnoland_tag}"
 
+  # Sentinel is pulled, not built. Pull here so .build-state records the
+  # digest we're actually running with. Failure is non-fatal: the operator
+  # may be offline or the registry unreachable — start/update will surface
+  # the issue separately.
+  echo ""
+  if ! sentinel_pull; then
+    echo "Warning: failed to pull sentinel image. Compose will retry on start." >&2
+  fi
+
   # Snapshot to .build-state so start/update can detect drift without docker.
   write_build_state
   echo ""
@@ -1066,6 +1075,27 @@ cmd_update() {
     reasons+=(".build-state missing — no record of last build")
   fi
 
+  # Sentinel: independent pull-drift check. Treat "remote digest changed"
+  # as a recreate signal (no local build, but compose needs the new image).
+  local need_sentinel_pull=0
+  if ! sentinel_tag_is_digest; then
+    local curr_remote
+    curr_remote="$(sentinel_remote_digest)"
+    if [[ -n "$curr_remote" ]]; then
+      if [[ -n "${PREV_SENTINEL_IMAGE_DIGEST:-}" &&
+        "${PREV_SENTINEL_IMAGE_DIGEST}" != "$curr_remote" ]]; then
+        local curr_short="${curr_remote#sha256:}"
+        need_sentinel_pull=1
+        need_recreate=1
+        reasons+=("sentinel image advanced on tag $(env_get SENTINEL_IMAGE_TAG latest): ${curr_short:0:12}")
+      elif [[ -z "${PREV_SENTINEL_IMAGE_DIGEST:-}" ]]; then
+        need_sentinel_pull=1
+        reasons+=("sentinel digest not yet recorded in ${STATE_FILE}")
+      fi
+    fi
+    # curr_remote empty → registry unreachable; skip silently.
+  fi
+
   # Runtime drift → recreate (compose.yml / validator.env edited after container created).
   if docker container inspect "$cname" >/dev/null 2>&1; then
     if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
@@ -1129,6 +1159,16 @@ cmd_update() {
   if ((need_rebuild == 1)); then
     cmd_build
     echo ""
+  elif ((need_sentinel_pull == 1 || force == 1)); then
+    # Build already pulls sentinel; otherwise pull here so compose picks up
+    # the new digest. write_build_state runs even without a rebuild so the
+    # recorded digest reflects what we actually use.
+    if sentinel_pull; then
+      write_build_state
+      echo ""
+    else
+      echo "Warning: sentinel pull failed; compose will retry on start." >&2
+    fi
   fi
   if docker container inspect "$cname" >/dev/null 2>&1; then
     echo "Stopping and removing containers..."
