@@ -251,16 +251,11 @@ _download_url() {
 install_lnav() {
   [[ -x "$LNAV_BIN" ]] && return 0
 
-  mkdir -p "$TOOLS_BIN_DIR"
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' RETURN
-
+  # Fail fast on platform/tool problems before creating any temp state.
   if ! command -v unzip >/dev/null 2>&1; then
     echo "Error: unzip is required to extract lnav" >&2
     return 1
   fi
-
   local os arch archive
   os="$(uname -s)"
   arch="$(uname -m)"
@@ -275,22 +270,34 @@ install_lnav() {
     ;;
   esac
 
+  mkdir -p "$TOOLS_BIN_DIR"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  # Manual cleanup on every exit path: avoids the bash 3.2 RETURN-trap-leak
+  # pitfall (traps declared in a function persist at shell scope).
+  local rc=0
   echo "Downloading lnav v${LNAV_VERSION}..." >&2
-  _download_url \
+  if ! _download_url \
     "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/${archive}" \
-    "${tmpdir}/lnav.zip" || return 1
-  unzip -q "${tmpdir}/lnav.zip" "lnav-${LNAV_VERSION}/lnav" -d "$tmpdir" || return 1
-  mv "${tmpdir}/lnav-${LNAV_VERSION}/lnav" "$LNAV_BIN"
-  chmod +x "$LNAV_BIN"
-  echo "lnav installed at ${LNAV_BIN}" >&2
+    "${tmpdir}/lnav.zip"; then
+    rc=1
+  elif ! unzip -q "${tmpdir}/lnav.zip" "lnav-${LNAV_VERSION}/lnav" -d "$tmpdir"; then
+    rc=1
+  else
+    mv "${tmpdir}/lnav-${LNAV_VERSION}/lnav" "$LNAV_BIN"
+    chmod +x "$LNAV_BIN"
+    echo "lnav installed at ${LNAV_BIN}" >&2
+  fi
+  rm -rf "$tmpdir"
+  return "$rc"
 }
 
 # Fetch the pinned jq release into $JQ_BIN if missing. Returns non-zero on
 # unsupported platform or download failure; callers should degrade gracefully.
+# Downloads atomically (tmpfile + mv) so a failed download never leaves a
+# partial or half-executable binary behind.
 install_jq() {
   [[ -x "$JQ_BIN" ]] && return 0
-
-  mkdir -p "$TOOLS_BIN_DIR"
 
   local os arch asset
   os="$(uname -s)"
@@ -306,28 +313,36 @@ install_jq() {
     ;;
   esac
 
+  mkdir -p "$TOOLS_BIN_DIR"
+  local tmp="${JQ_BIN}.tmp.$$"
   echo "Downloading jq v${JQ_VERSION}..." >&2
-  _download_url \
+  if ! _download_url \
     "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/${asset}" \
-    "$JQ_BIN" || return 1
-  chmod +x "$JQ_BIN"
+    "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  chmod +x "$tmp"
+  mv -f "$tmp" "$JQ_BIN"
   echo "jq installed at ${JQ_BIN}" >&2
 }
 
 # Resolve a usable jq binary. Prefer .tools/bin/jq, then system jq, then try
-# to install into .tools/bin/jq. Echoes the binary path on success; returns
-# non-zero on complete failure.
+# to install into .tools/bin/jq. Prints the binary path on success; returns
+# non-zero on complete failure. Uses printf so exotic paths don't confuse
+# callers that capture stdout via $(ensure_jq).
 ensure_jq() {
   if [[ -x "$JQ_BIN" ]]; then
-    echo "$JQ_BIN"
+    printf '%s\n' "$JQ_BIN"
     return 0
   fi
-  if command -v jq >/dev/null 2>&1; then
-    command -v jq
+  local sys_jq
+  if sys_jq="$(command -v jq 2>/dev/null)" && [[ -n "$sys_jq" ]]; then
+    printf '%s\n' "$sys_jq"
     return 0
   fi
-  if install_jq 2>&2; then
-    echo "$JQ_BIN"
+  if install_jq; then
+    printf '%s\n' "$JQ_BIN"
     return 0
   fi
   return 1
