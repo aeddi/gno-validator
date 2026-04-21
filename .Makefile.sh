@@ -144,6 +144,9 @@ compute_content_hash() {
   else
     hash_tool="shasum -a 256"
   fi
+  # `cat` is load-bearing: we hash the concatenation of all inputs, not the
+  # per-file digests `sha256sum file1 file2` would emit.
+  # shellcheck disable=SC2086 # hash_tool may be "shasum -a 256" — must word-split
   cat "$@" | $hash_tool | cut -c1-8
 }
 
