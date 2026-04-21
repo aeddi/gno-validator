@@ -1,7 +1,15 @@
-# gnoland node config overrides.
-# Each entry is applied to gnoland-data/config/config.toml via 'gnoland config set'
-# on every container start, before mandatory settings (consensus remote signer, telemetry).
+# gnoland node config overrides (optional).
+# Applied to gnoland-data/config/config.toml via 'gnoland config set' on each
+# container start, BEFORE the system-hardcoded overrides listed below.
 # Format: key = value (one per line; # for comments; blank lines ignored)
+
+# ---- System-hardcoded keys (overridden by the entrypoint, cannot be customized)
+# p2p.laddr                                              = "tcp://0.0.0.0:26656"   # in-container P2P bind
+# rpc.laddr                                              = "tcp://0.0.0.0:26657"   # in-container RPC bind
+# consensus.priv_validator.remote_signer.server_address  = "unix:///sock/gnokms.sock"   # gnokms socket
+# telemetry.metrics_enabled                              = true
+# telemetry.traces_enabled                               = true
+# telemetry.exporter_endpoint                            = "http://otelcol:4318"
 
 # ---- Required node settings
 moniker = "anon-val-01"
