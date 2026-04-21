@@ -14,10 +14,10 @@ Additionally, OpenTelemetry is set up to collect traces from `gnoland` and visua
 ### 1. Configure environment
 
 ```sh
-cp .env.example .env
+cp validator.env.example validator.env
 ```
 
-Edit `.env` and set:
+Edit `validator.env` and set:
 
 - `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make start` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
@@ -38,7 +38,7 @@ make gen-identity
 
 Creates the key `gnokms-docker-key` in `gnokms-data/keystore/`.
 
-- If `GNOKMS_PASSWORD` is set in `.env`, it is used automatically (no prompt).
+- If `GNOKMS_PASSWORD` is set in `validator.env`, it is used automatically (no prompt).
 - Otherwise, `gnokey` will prompt you interactively.
 
 ### 3. Configure the node
@@ -85,53 +85,65 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 Once the stack is up, open the Grafana dashboard at [http://localhost:3000](http://localhost:3000) (or the port set in `GRAFANA_PORT`).
 
-Anonymous access is enabled in read-only (Viewer) mode — no login required for browsing dashboards. To log in as admin, use the credentials set in `.env` (default: `admin` / `admin`).
+Anonymous access is enabled in read-only (Viewer) mode — no login required for browsing dashboards. To log in as admin, use the credentials set in `validator.env` (default: `admin` / `admin`).
 
 ## Operations
 
 ### Lifecycle
 
-| Command                 | What it does                                                                  | Cost                                              |
-| ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| `make start`            | First run: builds images + creates containers. Otherwise resumes stopped containers. | Free after first run.                         |
-| `make stop`             | Stops services but keeps containers (no recreate).                            | Free.                                             |
-| `make restart`          | `stop` + `start`. Re-applies `config.overrides` on the way up.                | Free. No password prompt.                         |
-| `make update [force=1]` | Rebuilds images if build inputs changed, recreates containers if `.env` / `docker-compose.yml` changed. `force=1` does both unconditionally. | Rebuild minutes; recreate wipes container logs. |
-| `make reset`            | Wipes chain state (`db`, `wal`, `priv_validator_state.json`). Prompts to stop and restart around the wipe. Preserves keystore, validator keys, node_id, and Grafana data. | Destructive on chain DB. |
+| Command                 | What it does                                                                                                                                                              | Cost                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `make start`            | First run: builds images + creates containers. Otherwise resumes stopped containers.                                                                                      | Free after first run.                           |
+| `make stop`             | Stops services but keeps containers (no recreate).                                                                                                                        | Free.                                           |
+| `make restart`          | `stop` + `start`. Re-applies `config.overrides` on the way up.                                                                                                            | Free. No password prompt.                       |
+| `make update [force=1]` | Rebuilds images if build inputs changed, recreates containers if `validator.env` / `docker-compose.yml` changed. `force=1` does both unconditionally.                     | Rebuild minutes; recreate wipes container logs. |
+| `make reset`            | Wipes chain state (`db`, `wal`, `priv_validator_state.json`). Prompts to stop and restart around the wipe. Preserves keystore, validator keys, node_id, and Grafana data. | Destructive on chain DB.                        |
 
 ### Build (rarely needed manually)
 
-| Command                 | What it does                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `make build [force=1]`  | Builds images whose labels don't match the current commit / Dockerfile / entrypoint. `force=1` rebuilds anyway. `start` and `update` call this automatically. |
+| Command                | What it does                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make build [force=1]` | Builds images whose labels don't match the current commit / Dockerfile / entrypoint. `force=1` rebuilds anyway. `start` and `update` call this automatically. |
 
 ### Inspection
 
-| Command                 | What it does                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `make status`           | Container status (`docker compose ps`).                                       |
-| `make infos`            | Validator identity, network config, build metadata, binary checksums.         |
-| `make logs-gnoland`     | Interactive log TUI (lnav). `SINCE=<duration>` controls history (default 1h). |
-| `make logs-gnokms`      | Follow gnokms logs.                                                           |
-| `make logs-telemetry`   | Follow otelcol / tempo / prometheus / grafana logs.                           |
+| Command                     | What it does                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails). |
+| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                             |
+| `make logs-gnoland`         | Interactive log TUI (lnav). `SINCE=<duration>` controls history (default 1h).                                                                                                                     |
+| `make logs-gnokms`          | Follow gnokms logs.                                                                                                                                                                               |
+| `make logs-telemetry`       | Follow otelcol / tempo / prometheus / grafana logs.                                                                                                                                               |
+
+### Cleanup
+
+| Command                   | What it does                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `make clean-imgs [yes=1]` | Remove all `gno-validator-*` Docker images. `yes=1` skips the confirmation prompt. |
 
 ### Setup
 
-| Command                 | What it does                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `make gen-identity`     | Generate the validator signing identity in the gnokms keystore.               |
-| `make help`             | Show the target list.                                                         |
+| Command             | What it does                                                    |
+| ------------------- | --------------------------------------------------------------- |
+| `make gen-identity` | Generate the validator signing identity in the gnokms keystore. |
+| `make help`         | Show the target list.                                           |
 
 ### Change → command cheat sheet
 
-| You edited…                                    | Minimum command |
-| ---------------------------------------------- | --------------- |
-| `config.overrides`                             | `make restart`  |
-| `.env`, `docker-compose.yml`                   | `make update`   |
-| `Dockerfile`, `docker/*-entrypoint.sh`         | `make update`   |
-| Upstream `GNO_VERSION` branch moved            | `make update`   |
+| You edited…                            | Minimum command |
+| -------------------------------------- | --------------- |
+| `config.overrides`                     | `make restart`  |
+| `validator.env`, `docker-compose.yml`  | `make update`   |
+| `Dockerfile`, `docker/*-entrypoint.sh` | `make update`   |
+| Upstream `GNO_VERSION` branch moved    | `make update`   |
 
 > `make update` prompts before recreating — pass `force=1` to skip the prompt.
+
+### How drift detection works
+
+`make build` writes `.build-state` (gitignored) recording the commit, version, repo, and per-image content hashes. `make start` and `make update` read it back and report drift precisely (e.g., `gno commit advanced on chain/test12: 8513a68f → 9a2b4c1e`). No Docker calls needed for the check — fast and offline-friendly.
+
+Downloaded tools (lnav, jq) live under `.tools/bin/` (gitignored, auto-fetched on first use).
 
 ## Architecture
 
@@ -145,9 +157,9 @@ Anonymous access is enabled in read-only (Viewer) mode — no login required for
 
 ## Password security
 
-The keystore is encrypted with `GNOKMS_PASSWORD`. In production, **do not store this password on disk** — including `.env`.
+The keystore is encrypted with `GNOKMS_PASSWORD`. In production, **do not store this password on disk** — including `validator.env`.
 
-If the password is written to `.env`, an attacker who dumps the disk (via snapshot, backup exfiltration, or physical access) gets both the encrypted keystore and the key to decrypt it. Keeping the password only in RAM means disk access alone is not enough.
+If the password is written to `validator.env`, an attacker who dumps the disk (via snapshot, backup exfiltration, or physical access) gets both the encrypted keystore and the key to decrypt it. Keeping the password only in RAM means disk access alone is not enough.
 
 **Recommended approach:** leave `GNOKMS_PASSWORD` unset and let `make start` / `make update` prompt you interactively at startup. The password is then held only in memory for the lifetime of the process.
 
@@ -163,7 +175,7 @@ If the password is written to `.env`, an attacker who dumps the disk (via snapsh
 
 ## Optional: Grafana admin
 
-By default, Grafana uses `admin` / `admin` as credentials. To set custom credentials, add to `.env`:
+By default, Grafana uses `admin` / `admin` as credentials. To set custom credentials, add to `validator.env`:
 
 ```sh
 GRAFANA_ADMIN_USER=your-username
@@ -178,7 +190,7 @@ Admin credentials are required to configure alerting contact points and manage u
 
 Grafana can send an email alert if no new block has been produced for a configurable duration. This requires SMTP and a Grafana admin user to be configured.
 
-Add to `.env`:
+Add to `validator.env`:
 
 ```sh
 GRAFANA_ADMIN_USER=your-username        # required for alerting to be provisioned
