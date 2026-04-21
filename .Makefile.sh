@@ -123,6 +123,73 @@ sha256_of_file() {
   fi
 }
 
+# ---- Sentinel image helpers
+
+# Print the full sentinel image reference built from validator.env's
+# SENTINEL_IMAGE_TAG (default: latest). The ghcr.io/... prefix is hardcoded
+# because this repo only consumes the official build.
+sentinel_image_ref() {
+  local tag
+  tag="$(env_get SENTINEL_IMAGE_TAG latest)"
+  printf 'ghcr.io/aeddi/gno-watchtower/sentinel:%s\n' "$tag"
+}
+
+# True when SENTINEL_IMAGE_TAG is a pinned digest (matches 'sha256:' prefix).
+# Digest pins have no "newer version" to check — callers skip the manifest
+# query and treat the pin as authoritative.
+sentinel_tag_is_digest() {
+  local tag
+  tag="$(env_get SENTINEL_IMAGE_TAG latest)"
+  [[ "$tag" == sha256:* ]]
+}
+
+# Resolve the current ghcr manifest digest for the configured sentinel tag.
+# Prints the digest (sha256:...) on success, empty string on any failure
+# (network, auth, missing tool). Never exits non-zero — callers treat empty
+# output as "check unavailable, skip".
+sentinel_remote_digest() {
+  local ref
+  ref="$(sentinel_image_ref)"
+  # `docker manifest inspect --verbose` prints JSON with a top-level "Descriptor.digest"
+  # for a single-platform image, or "manifests[].digest" for a multi-platform
+  # index. We capture the platform-agnostic descriptor digest which is what
+  # `docker pull` would resolve to.
+  local out
+  out="$(docker manifest inspect "$ref" 2>/dev/null || true)"
+  [[ -z "$out" ]] && return 0
+  # Prefer jq when available (already common in this codebase via ensure_jq),
+  # but fall back to grep so sentinel digest check never hard-requires jq.
+  local digest=""
+  local jq_bin
+  if jq_bin="$(ensure_jq 2>/dev/null)" && [[ -n "$jq_bin" ]]; then
+    digest="$(printf '%s' "$out" | "$jq_bin" -r '.manifests[0].digest // .config.digest // empty' 2>/dev/null || true)"
+  fi
+  if [[ -z "$digest" ]]; then
+    # grep the first "digest" field — works for both schema variants.
+    digest="$(printf '%s' "$out" | grep -m1 -Eo '"digest"\s*:\s*"sha256:[a-f0-9]{64}"' | grep -Eo 'sha256:[a-f0-9]{64}' || true)"
+  fi
+  printf '%s\n' "$digest"
+}
+
+# Resolve the locally pulled image's digest for the configured sentinel tag.
+# Prints the digest (sha256:...) on success, empty string if the image is not
+# present locally.
+sentinel_local_digest() {
+  local ref
+  ref="$(sentinel_image_ref)"
+  docker image inspect --format '{{index .RepoDigests 0}}' "$ref" 2>/dev/null |
+    grep -Eo 'sha256:[a-f0-9]{64}' | head -1 || true
+}
+
+# Pull the sentinel image for the configured tag. Returns 0 on success, 1 on
+# failure. Keeps output visible so the operator sees progress.
+sentinel_pull() {
+  local ref
+  ref="$(sentinel_image_ref)"
+  echo "Pulling ${ref}..."
+  docker pull "$ref"
+}
+
 # ---- Image tag + content-hash helpers
 
 # Compute an 8-character content hash from the concatenated content of all
