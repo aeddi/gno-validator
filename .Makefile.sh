@@ -27,7 +27,10 @@ GNOLAND_DATA="gnoland-data"
 GNOKMS_KEYNAME="gnokms-docker-key"
 
 LNAV_VERSION="0.13.2"
-LNAV_BIN=".lnav/bin/lnav"
+JQ_VERSION="1.7.1"
+TOOLS_BIN_DIR=".tools/bin"
+LNAV_BIN="${TOOLS_BIN_DIR}/lnav"
+JQ_BIN="${TOOLS_BIN_DIR}/jq"
 
 # Host UID/GID are consumed by docker-compose.yml for gnoland's user mapping
 # (keeps files under gnoland-data/ owned by the operator, not root).
@@ -226,7 +229,21 @@ file_newer_than_docker() {
   ((file_mtime > docker_mtime))
 }
 
-# ---- lnav installer
+# ---- Tool installers
+
+# Download a URL to a file path using curl or wget.
+# Returns non-zero if neither is available or the download fails.
+_download_url() {
+  local url="$1" out="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$out" "$url"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$out" "$url"
+  else
+    echo "Error: curl or wget is required to download ${url}" >&2
+    return 1
+  fi
+}
 
 # Fetch the pinned lnav release into $LNAV_BIN if missing. Returns non-zero if
 # the host is missing curl/wget/unzip or runs on an unsupported architecture,
@@ -234,45 +251,86 @@ file_newer_than_docker() {
 install_lnav() {
   [[ -x "$LNAV_BIN" ]] && return 0
 
-  rm -rf ".lnav/bin/lnav.zip" ".lnav/bin/lnav-${LNAV_VERSION}"
-  mkdir -p .lnav/bin
+  mkdir -p "$TOOLS_BIN_DIR"
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' RETURN
 
-  local fetch
-  if command -v curl >/dev/null 2>&1; then
-    fetch=(curl -fsSL -o)
-  elif command -v wget >/dev/null 2>&1; then
-    fetch=(wget -q -O)
-  else
-    echo "Error: curl or wget is required to download lnav" >&2
-    return 1
-  fi
   if ! command -v unzip >/dev/null 2>&1; then
     echo "Error: unzip is required to extract lnav" >&2
     return 1
   fi
 
-  local os arch zip
+  local os arch archive
   os="$(uname -s)"
   arch="$(uname -m)"
   case "${os}/${arch}" in
-  Darwin/arm64) zip="lnav-${LNAV_VERSION}-aarch64-macos.zip" ;;
-  Darwin/*) zip="lnav-${LNAV_VERSION}-x86_64-macos.zip" ;;
-  Linux/aarch64) zip="lnav-${LNAV_VERSION}-linux-musl-arm64.zip" ;;
-  Linux/*) zip="lnav-${LNAV_VERSION}-linux-musl-x86_64.zip" ;;
+  Darwin/arm64) archive="lnav-${LNAV_VERSION}-aarch64-macos.zip" ;;
+  Darwin/*) archive="lnav-${LNAV_VERSION}-x86_64-macos.zip" ;;
+  Linux/aarch64) archive="lnav-${LNAV_VERSION}-linux-musl-arm64.zip" ;;
+  Linux/*) archive="lnav-${LNAV_VERSION}-linux-musl-x86_64.zip" ;;
   *)
-    echo "Error: unsupported platform ${os}/${arch}" >&2
+    echo "Error: unsupported platform ${os}/${arch} for lnav" >&2
     return 1
     ;;
   esac
 
-  echo "Downloading lnav v${LNAV_VERSION}..."
-  "${fetch[@]}" ".lnav/bin/lnav.zip" \
-    "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/${zip}"
-  unzip -q ".lnav/bin/lnav.zip" "lnav-${LNAV_VERSION}/lnav" -d .lnav/bin
-  mv ".lnav/bin/lnav-${LNAV_VERSION}/lnav" "$LNAV_BIN"
-  rm -rf ".lnav/bin/lnav.zip" ".lnav/bin/lnav-${LNAV_VERSION}"
+  echo "Downloading lnav v${LNAV_VERSION}..." >&2
+  _download_url \
+    "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/${archive}" \
+    "${tmpdir}/lnav.zip" || return 1
+  unzip -q "${tmpdir}/lnav.zip" "lnav-${LNAV_VERSION}/lnav" -d "$tmpdir" || return 1
+  mv "${tmpdir}/lnav-${LNAV_VERSION}/lnav" "$LNAV_BIN"
   chmod +x "$LNAV_BIN"
-  echo "lnav installed at ${LNAV_BIN}"
+  echo "lnav installed at ${LNAV_BIN}" >&2
+}
+
+# Fetch the pinned jq release into $JQ_BIN if missing. Returns non-zero on
+# unsupported platform or download failure; callers should degrade gracefully.
+install_jq() {
+  [[ -x "$JQ_BIN" ]] && return 0
+
+  mkdir -p "$TOOLS_BIN_DIR"
+
+  local os arch asset
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "${os}/${arch}" in
+  Darwin/arm64) asset="jq-macos-arm64" ;;
+  Darwin/x86_64) asset="jq-macos-amd64" ;;
+  Linux/aarch64 | Linux/arm64) asset="jq-linux-arm64" ;;
+  Linux/x86_64) asset="jq-linux-amd64" ;;
+  *)
+    echo "Error: unsupported platform ${os}/${arch} for jq" >&2
+    return 1
+    ;;
+  esac
+
+  echo "Downloading jq v${JQ_VERSION}..." >&2
+  _download_url \
+    "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/${asset}" \
+    "$JQ_BIN" || return 1
+  chmod +x "$JQ_BIN"
+  echo "jq installed at ${JQ_BIN}" >&2
+}
+
+# Resolve a usable jq binary. Prefer .tools/bin/jq, then system jq, then try
+# to install into .tools/bin/jq. Echoes the binary path on success; returns
+# non-zero on complete failure.
+ensure_jq() {
+  if [[ -x "$JQ_BIN" ]]; then
+    echo "$JQ_BIN"
+    return 0
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    command -v jq
+    return 0
+  fi
+  if install_jq 2>&2; then
+    echo "$JQ_BIN"
+    return 0
+  fi
+  return 1
 }
 
 # ---- Lifecycle helpers
