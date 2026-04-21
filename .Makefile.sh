@@ -816,9 +816,13 @@ cmd_update() {
   # assignment so a missing state file correctly reports "state missing".
   local prev_state
   if prev_state="$(read_build_state_as_prev 2>/dev/null)"; then
+    # eval of printf '%q'-quoted PREV_* assignments — safe by construction.
     eval "$prev_state"
-    local summary
-    if summary="$(build_state_drift_summary)" && [[ -n "$summary" ]]; then
+    # build_state_drift_summary returns 1 when drift IS detected. Capture the
+    # exit via `|| has_drift=$?` (plain call would trip set -e on drift).
+    local summary has_drift=0
+    summary="$(build_state_drift_summary)" || has_drift=$?
+    if ((has_drift == 1)); then
       need_rebuild=1
       reasons+=("build inputs changed since last build:")
       while IFS= read -r line; do
@@ -880,8 +884,10 @@ cmd_update() {
   echo ""
 
   if ((force == 0)); then
-    local confirm
-    read -r -p "Continue? [Y/n] " confirm
+    local confirm=""
+    # `|| true` so an EOF/non-TTY stdin doesn't trip set -e (non-interactive
+    # callers should pass force=1 explicitly; default-yes on empty is safe).
+    read -r -p "Continue? [Y/n] " confirm || true
     if [[ "$confirm" == "n" || "$confirm" == "N" ]]; then
       echo "Aborted."
       exit 1
