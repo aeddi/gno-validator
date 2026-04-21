@@ -58,8 +58,6 @@ services:
         depends_on:
             gnokms:
                 condition: service_started
-            otelcol:
-                condition: service_started
         cap_add:
             - SYS_TIME
         restart: on-failure
@@ -69,97 +67,5 @@ services:
                 max-size: '1g'
                 max-file: '${GNOLAND_LOG_SIZE:-3}'
 
-    otelcol:
-        image: otel/opentelemetry-collector-contrib:0.147.0
-        user: '0'
-        volumes:
-            - ./telemetry/otelcol-config.yml:/etc/otelcol-contrib/config.yaml:ro
-            - /var/run/docker.sock:/var/run/docker.sock:ro
-            - /:/hostfs:ro
-        environment:
-            - HOST_PROC=/hostfs/proc
-            - HOST_SYS=/hostfs/sys
-            - HOST_FS=/hostfs
-            - GOMEMLIMIT=200MiB
-        deploy:
-            resources:
-                limits:
-                    memory: 256M
-        pid: host
-        depends_on:
-            tempo:
-                condition: service_started
-        restart: unless-stopped
-        logging:
-            driver: json-file
-            options:
-                max-size: '100m'
-                max-file: '1'
-
-    tempo:
-        image: grafana/tempo:2.6.1
-        command: ['-config.file=/etc/tempo.yaml']
-        volumes:
-            - ./telemetry/tempo.yml:/etc/tempo.yaml:ro
-        deploy:
-            resources:
-                limits:
-                    memory: 512M
-        restart: unless-stopped
-        logging:
-            driver: json-file
-            options:
-                max-size: '100m'
-                max-file: '1'
-
-    prometheus:
-        image: prom/prometheus:v3.10.0
-        volumes:
-            - ./telemetry/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-        depends_on:
-            otelcol:
-                condition: service_started
-        restart: unless-stopped
-        logging:
-            driver: json-file
-            options:
-                max-size: '100m'
-                max-file: '1'
-
-    grafana:
-        image: grafana/grafana:12.4.1
-        entrypoint: ['/entrypoint.sh']
-        environment:
-            - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-            - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-            - GF_AUTH_ANONYMOUS_ENABLED=true
-            - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-            - GF_SMTP_ENABLED=${GRAFANA_SMTP_ENABLED:-false}
-            - GF_SMTP_HOST=${GRAFANA_SMTP_HOST:-}
-            - GF_SMTP_USER=${GRAFANA_SMTP_USER:-}
-            - GF_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD:-}
-            - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-}
-            - GF_SMTP_FROM_NAME=${GRAFANA_SMTP_FROM_NAME:-Grafana}
-            - GRAFANA_ALERT_EMAIL_ADDRESSES=${GRAFANA_ALERT_EMAIL_ADDRESSES:-}
-            - GRAFANA_BLOCK_STALL_SECONDS=${GRAFANA_BLOCK_STALL_SECONDS:-300}
-        volumes:
-            - grafana_data:/var/lib/grafana
-            - ./telemetry/grafana/entrypoint.sh:/entrypoint.sh:ro
-            - ./telemetry/grafana/provisioning:/etc/grafana/provisioning:ro
-        ports:
-            - '${GRAFANA_LADDR:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000'
-        depends_on:
-            prometheus:
-                condition: service_started
-            tempo:
-                condition: service_started
-        restart: unless-stopped
-        logging:
-            driver: json-file
-            options:
-                max-size: '100m'
-                max-file: '1'
-
 volumes:
     gnokms-sock:
-    grafana_data:
