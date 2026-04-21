@@ -17,3 +17,6 @@ gnokms-data/
 # reverse-proxy — local config and generated files
 reverse-proxy/config
 reverse-proxy/caddy-data/
+
+# Build state snapshot — written by 'make build', consumed by 'make start'/'update'
+.build-state
