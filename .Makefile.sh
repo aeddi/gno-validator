@@ -627,11 +627,14 @@ cmd_build() {
   fi
 
   # Export the inputs the Dockerfile ARGs and compose-interpolation need.
+  # Split assignment + export so command-sub failures aren't masked by the
+  # always-zero exit status of the `export` builtin.
   export GNO_REPO="$repo"
   export GNO_VERSION="$version"
   export GNO_COMMIT_HASH="$commit"
-  export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  export DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
+  BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
+  export BUILD_DATE DOCKERFILE_HASH
 
   echo "Build inputs:"
   echo "  repo=${repo}  version=${version}  commit=${commit:0:12}"
@@ -665,12 +668,15 @@ cmd_build() {
   fi
 
   # Build each service. ENTRYPOINT_HASH is that image's content hash so the
-  # LABEL on each image matches its own content.
-  export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
+  # LABEL on each image matches its own content. Split assign + export so
+  # a failing sha256_of_file isn't masked by `export`'s always-zero exit.
+  ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
+  export ENTRYPOINT_HASH
   echo "==> Building gnokms image..."
   _compose build gnokms
 
-  export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
+  ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
+  export ENTRYPOINT_HASH
   echo "==> Building gnoland image..."
   _compose build gnoland
 
