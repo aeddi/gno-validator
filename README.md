@@ -22,6 +22,7 @@ Edit `validator.env` and set:
 - `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make start` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
 - `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
 - `GNO_REPO` — GitHub repo slug to clone gno sources from (default: `gnolang/gno`)
+- `SENTINEL_IMAGE_TAG` — tag or digest for the sentinel image pulled from `ghcr.io/aeddi/gno-watchtower/sentinel` (default: `latest`). Pin a digest (`sha256:...`) for reproducibility; drift is reported when a tag like `latest` advances on the registry.
 - `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
 - `GNOLAND_RPC_LADDR` — interface gnoland RPC binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing RPC through a reverse proxy only.
