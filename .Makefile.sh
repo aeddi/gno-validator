@@ -755,8 +755,11 @@ cmd_status() {
   rpc_port="$(env_get GNOLAND_RPC_PORT 26657)"
 
   # Without jq we can't parse RPC JSON — offer a raw-JSON dump degrade path.
+  # Let install_jq's diagnostics surface to the user (download progress, error
+  # detail). Only the install path writes to stderr; the Warning below is a
+  # one-line summary for the operator.
   local jq_bin
-  if ! jq_bin="$(ensure_jq 2>/dev/null)"; then
+  if ! jq_bin="$(ensure_jq)"; then
     echo "Warning: jq unavailable (auto-install failed). Watch mode disabled; printing raw JSON once." >&2
     _status_raw "$rpc_port"
     return 0
@@ -765,6 +768,13 @@ cmd_status() {
   if [[ -z "$watch_interval" ]]; then
     _status_render "$rpc_port" "$jq_bin"
     return 0
+  fi
+
+  # Validate watch= input before entering the loop so a typo gets a clear
+  # error instead of an opaque `sleep: invalid time interval` mid-loop.
+  if ! [[ "$watch_interval" =~ ^[0-9]+(\.[0-9]+)?$ ]] || [[ "$watch_interval" == "0" ]]; then
+    echo "Error: watch= must be a positive number (got '${watch_interval}')." >&2
+    return 2
   fi
 
   # Watch mode — hide cursor, clear screen, loop with ANSI redraw.
@@ -799,7 +809,7 @@ _status_render() {
 
   moniker="$(echo "$status_json" | "$jq" -r '.result.node_info.moniker // "-"' 2>/dev/null || echo "-")"
   height="$(echo "$status_json" | "$jq" -r '.result.sync_info.latest_block_height // "-"' 2>/dev/null || echo "-")"
-  block="$(echo "$status_json" | "$jq" -r '.result.sync_info.latest_block_time // "-"' 2>/dev/null | cut -c1-19)"
+  block="$(echo "$status_json" | "$jq" -r '(.result.sync_info.latest_block_time // "-")[:19]' 2>/dev/null || echo "-")"
   catching_up="$(echo "$status_json" | "$jq" -r '.result.sync_info.catching_up // false' 2>/dev/null || echo "false")"
   vp="$(echo "$status_json" | "$jq" -r '.result.validator_info.voting_power // "0"' 2>/dev/null || echo "0")"
   peers="$(echo "$net_json" | "$jq" -r '.result.n_peers // "-"' 2>/dev/null || echo "-")"
