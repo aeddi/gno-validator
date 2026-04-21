@@ -18,7 +18,7 @@
 #   infos                    Print node identity, network config, build metadata, checksums
 #   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default: 1h)
 #   logs-gnokms              Follow gnokms logs
-#   logs-telemetry           Follow logs for all telemetry services
+#   logs-sentinel            Follow sentinel logs
 #
 # Cleanup:
 #   clean-imgs  [yes=1]      Remove all gno-validator Docker images (yes=1 skips the prompt)
@@ -50,7 +50,7 @@ PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
 .PHONY: help gen-identity infos build start stop restart update reset \
-        logs-gnoland logs-gnokms logs-telemetry status clean-imgs
+        logs-gnoland logs-gnokms logs-sentinel status clean-imgs
 
 help:
 	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
@@ -85,8 +85,8 @@ logs-gnoland:
 logs-gnokms:
 	@$(SCRIPT) logs-gnokms
 
-logs-telemetry:
-	@$(SCRIPT) logs-telemetry
+logs-sentinel:
+	@$(SCRIPT) logs-sentinel
 
 status:
 	@$(SCRIPT) status
