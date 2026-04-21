@@ -847,10 +847,9 @@ _http_get() {
 
 cmd_reset() {
   # Figure out current state of the gnoland container.
-  local was_running=0 exists=1
-  if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
-    exists=0
-  elif _compose ps --status running -q gnoland 2>/dev/null | grep -q .; then
+  local was_running=0
+  if docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1 &&
+    _compose ps --status running -q gnoland 2>/dev/null | grep -q .; then
     was_running=1
   fi
 
