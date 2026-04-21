@@ -626,57 +626,70 @@ cmd_build() {
     commit="$version"
   fi
 
-  # Export so image_input_hashes, compose, and the Dockerfile ARGs all see the same values.
+  # Export the inputs the Dockerfile ARGs and compose-interpolation need.
   export GNO_REPO="$repo"
   export GNO_VERSION="$version"
   export GNO_COMMIT_HASH="$commit"
   export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   export DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
 
-  # Decide per-image whether a rebuild is needed.
-  local force="${FORCE:-0}" gnokms_needs gnoland_needs
   echo "Build inputs:"
   echo "  repo=${repo}  version=${version}  commit=${commit:0:12}"
   echo "  dockerfile sha256=${DOCKERFILE_HASH:0:12}"
   echo ""
 
-  if [[ "$force" == "1" ]]; then
-    echo "FORCE=1 → rebuilding both images."
-    gnokms_needs=1
-    gnoland_needs=1
+  local force="${FORCE:-0}"
+  if [[ "$force" != "1" ]]; then
+    # Skip if .build-state matches current inputs AND both content-tagged
+    # images exist locally.
+    local prev_ok=0
+    if eval "$(read_build_state_as_prev 2>/dev/null)"; then prev_ok=1; fi
+    if ((prev_ok == 1)); then
+      local curr_gnokms curr_gnoland
+      curr_gnokms="$(content_hash_for gnokms)"
+      curr_gnoland="$(content_hash_for gnoland)"
+      if [[ "${PREV_GNO_COMMIT:-}" == "${commit}" &&
+        "${PREV_GNO_VERSION:-}" == "${version}" &&
+        "${PREV_GNO_REPO:-}" == "${repo}" &&
+        "${PREV_GNOKMS_CONTENT_HASH:-}" == "${curr_gnokms}" &&
+        "${PREV_GNOLAND_CONTENT_HASH:-}" == "${curr_gnoland}" ]] &&
+        docker image inspect "${PREV_GNOKMS_IMAGE_TAG:-}" >/dev/null 2>&1 &&
+        docker image inspect "${PREV_GNOLAND_IMAGE_TAG:-}" >/dev/null 2>&1; then
+        echo "Nothing to rebuild — .build-state and images match current inputs."
+        echo "  (pass force=1 to rebuild anyway)"
+        return 0
+      fi
+    fi
   else
-    echo "Comparing with existing image labels..."
-    if image_needs_rebuild "$GNOKMS_IMAGE" gnokms; then
-      gnokms_needs=1
-    else
-      gnokms_needs=0
-      echo "  gnokms: up to date"
-    fi
-    if image_needs_rebuild "$GNOLAND_IMAGE" gnoland; then
-      gnoland_needs=1
-    else
-      gnoland_needs=0
-      echo "  gnoland: up to date"
-    fi
-    echo ""
+    echo "FORCE=1 → rebuilding both images."
   fi
 
-  if ((gnokms_needs == 0 && gnoland_needs == 0)); then
-    echo "Nothing to rebuild (pass force=1 to rebuild anyway)."
-    return 0
-  fi
+  # Build each service. ENTRYPOINT_HASH is that image's content hash so the
+  # LABEL on each image matches its own content.
+  export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
+  echo "==> Building gnokms image..."
+  _compose build gnokms
 
-  # Build each image with its own entrypoint-hash label.
-  if ((gnokms_needs == 1)); then
-    echo "==> Building gnokms image..."
-    export ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
-    _compose build gnokms
-  fi
-  if ((gnoland_needs == 1)); then
-    echo "==> Building gnoland image..."
-    export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
-    _compose build gnoland
-  fi
+  export ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
+  echo "==> Building gnoland image..."
+  _compose build gnoland
+
+  # Tag both images with content-addressable tags so the operator can roll
+  # back to a specific build by retagging it as :latest.
+  local gnokms_tag gnoland_tag
+  gnokms_tag="$(image_tag_for gnokms "$commit")"
+  gnoland_tag="$(image_tag_for gnoland "$commit")"
+  docker tag "$GNOKMS_IMAGE" "${GNOKMS_IMAGE}:${gnokms_tag}"
+  docker tag "$GNOLAND_IMAGE" "${GNOLAND_IMAGE}:${gnoland_tag}"
+  echo ""
+  echo "Tagged:"
+  echo "  ${GNOKMS_IMAGE}:${gnokms_tag}"
+  echo "  ${GNOLAND_IMAGE}:${gnoland_tag}"
+
+  # Snapshot to .build-state so start/update can detect drift without docker.
+  write_build_state
+  echo ""
+  echo "Wrote ${STATE_FILE}."
 }
 
 cmd_start() {
