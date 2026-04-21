@@ -119,11 +119,6 @@ image_label() {
   docker inspect --format "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/null || true
 }
 
-# Print SHA-256 of a file inside a Docker image.
-sha256_in_image() {
-  docker run --rm --entrypoint sha256sum "$1" "$2" | awk '{print $1}'
-}
-
 # Print SHA-256 of a local file (portable across Linux and macOS).
 sha256_of_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -548,44 +543,50 @@ cmd_gen_identity() {
 }
 
 cmd_infos() {
-  # infos is a read-only inspection command — never trigger a build from here.
-  # If images are missing, point the operator at the commands that do build.
-  local missing=()
-  docker image inspect "$GNOLAND_IMAGE" >/dev/null 2>&1 || missing+=("$GNOLAND_IMAGE")
-  docker image inspect "$GNOKMS_IMAGE" >/dev/null 2>&1 || missing+=("$GNOKMS_IMAGE")
-  if ((${#missing[@]} > 0)); then
-    echo "Error: required image(s) not built yet:" >&2
-    local m
-    for m in "${missing[@]}"; do echo "  - $m" >&2; done
-    echo "" >&2
-    echo "Run 'make build' (or 'make start' on first use) to build them." >&2
-    exit 1
+  # Ensure images exist — silent if already up to date, verbose + fail loudly
+  # if a build is needed but inputs are invalid (cmd_build surfaces the error).
+  if ! docker image inspect "$GNOLAND_IMAGE" >/dev/null 2>&1 ||
+    ! docker image inspect "$GNOKMS_IMAGE" >/dev/null 2>&1; then
+    echo "Building required images..."
+    cmd_build
+    echo ""
   fi
 
   mkdir -p "${GNOLAND_DATA}/config" "${GNOLAND_DATA}/secrets"
 
   echo "=== Identity ==="
-  # `gnokey list` can briefly fail with a keystore DB lock when gnokms is
-  # actively signing. Capture output separately and tolerate the failure so
-  # the rest of `infos` still prints — the operator can retry for identity.
-  local gnokey_out
-  gnokey_out="$(docker run --rm \
-    --entrypoint gnokey \
-    -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
-    "$GNOKMS_IMAGE" \
-    list --home /gnokms-data/keystore 2>/dev/null || true)"
-  if [[ -n "$gnokey_out" ]]; then
-    echo "$gnokey_out" | awk '{
-            for (i = 1; i <= NF; i++) {
-                if ($i == "addr:") addr = $(i+1)
-                if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
-            }
-            print "validator address: " addr "\nvalidator pub_key: " pub
-        }'
-  else
-    echo "validator address: (gnokey list failed — keystore locked by running gnokms; retry shortly)"
-    echo "validator pub_key: (gnokey list failed — keystore locked by running gnokms; retry shortly)"
+  # Three states for the validator keystore:
+  #   1. Empty/missing → hint at 'make gen-identity'.
+  #   2. Populated but gnokms holds the DB lock → transient; retry shortly.
+  #   3. Populated and readable → parse gnokey list output.
+  local gnokey_out=""
+  if [[ -d "${GNOKMS_DATA}/keystore" ]] &&
+    [[ -n "$(ls -A "${GNOKMS_DATA}/keystore" 2>/dev/null)" ]]; then
+    gnokey_out="$(docker run --rm \
+      --entrypoint gnokey \
+      -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
+      "$GNOKMS_IMAGE" \
+      list --home /gnokms-data/keystore 2>/dev/null || true)"
   fi
+  if [[ -n "$gnokey_out" ]] && echo "$gnokey_out" | grep -q 'addr:'; then
+    echo "$gnokey_out" | awk '{
+        for (i = 1; i <= NF; i++) {
+            if ($i == "addr:") addr = $(i+1)
+            if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
+        }
+        print "validator address: " addr "\nvalidator pub_key: " pub
+    }'
+  elif [[ ! -d "${GNOKMS_DATA}/keystore" ]] ||
+    [[ -z "$(ls -A "${GNOKMS_DATA}/keystore" 2>/dev/null)" ]]; then
+    echo "validator address: (no keystore — run 'make gen-identity')"
+    echo "validator pub_key: (no keystore — run 'make gen-identity')"
+  else
+    echo "validator address: (keystore locked by running gnokms; retry shortly)"
+    echo "validator pub_key: (keystore locked by running gnokms; retry shortly)"
+  fi
+  # node_id + moniker come from gnoland-data via a throwaway gnoland container.
+  # Its entrypoint initializes secrets/config if missing, so these calls always
+  # succeed once images exist.
   echo "node_id:           $(gnoland_run gnoland secrets get node_id.id --raw)"
   echo "moniker:           $(gnoland_run gnoland config get moniker --raw)"
   echo ""
@@ -602,12 +603,6 @@ cmd_infos() {
   echo "gno version:       $(image_label "$GNOLAND_IMAGE" gno.version)"
   echo "gno repo:          $(image_label "$GNOLAND_IMAGE" gno.repo)"
   echo "build date:        $(image_label "$GNOLAND_IMAGE" build.date)"
-  echo ""
-
-  echo "=== Binary Checksums (SHA-256) ==="
-  echo "gnoland:           $(sha256_in_image "$GNOLAND_IMAGE" /usr/local/bin/gnoland)"
-  echo "gnokey:            $(sha256_in_image "$GNOKMS_IMAGE" /usr/local/bin/gnokey)"
-  echo "gnokms:            $(sha256_in_image "$GNOKMS_IMAGE" /usr/local/bin/gnokms)"
   echo ""
 
   echo "=== File Checksums (SHA-256) ==="
