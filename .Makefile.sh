@@ -7,7 +7,7 @@
 #
 # Usage: .Makefile.sh <command>
 # Commands: gen-identity, infos, build, start, stop, restart, logs-gnoland,
-#           logs-gnokms, logs-telemetry, status, reset, update
+#           logs-gnokms, logs-sentinel, status, reset, update
 
 set -euo pipefail
 
@@ -454,12 +454,6 @@ _fresh_up() {
   }
 
   prompt_password_if_unset GNOKMS_PASSWORD
-  if env_has_value GRAFANA_ADMIN_USER; then
-    prompt_password_if_unset GRAFANA_ADMIN_PASSWORD
-  fi
-  if env_matches GRAFANA_SMTP_ENABLED true; then
-    prompt_password_if_unset GRAFANA_SMTP_PASSWORD
-  fi
 
   # Validate the keystore/password up front: a wrong password would only
   # surface later as a gnokms crash loop, which is much harder to diagnose.
@@ -752,8 +746,8 @@ cmd_logs_gnokms() {
   _compose logs -f gnokms
 }
 
-cmd_logs_telemetry() {
-  _compose logs -f otelcol tempo prometheus grafana
+cmd_logs_sentinel() {
+  _compose logs -f sentinel
 }
 
 cmd_status() {
@@ -869,7 +863,7 @@ cmd_reset() {
   echo "About to reset chain state."
   echo "  Will delete: ${GNOLAND_DATA}/db, ${GNOLAND_DATA}/wal"
   echo "  Will reset : ${GNOLAND_DATA}/secrets/priv_validator_state.json"
-  echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config, grafana data"
+  echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config"
 
   local confirm
   read -r -p "Continue? [y/N] " confirm
@@ -1024,7 +1018,7 @@ cmd_update() {
   done
   echo ""
   echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, keys, config), ${GNOKMS_DATA}/ (keystore),"
-  echo "           genesis.json, and named volumes (grafana_data, gnokms-sock)."
+  echo "           genesis.json, and named volumes (gnokms-sock)."
   echo ""
 
   if ((force == 0)); then
@@ -1070,7 +1064,7 @@ stop) cmd_stop ;;
 restart) cmd_restart ;;
 logs-gnoland) cmd_logs_gnoland ;;
 logs-gnokms) cmd_logs_gnokms ;;
-logs-telemetry) cmd_logs_telemetry ;;
+logs-sentinel) cmd_logs_sentinel ;;
 status) cmd_status ;;
 reset) cmd_reset ;;
 clean-imgs) cmd_clean_imgs ;;
