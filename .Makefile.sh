@@ -243,11 +243,17 @@ image_tag_for() {
 write_build_state() {
   local out_file="$STATE_FILE"
   local build_date gnokms_content gnoland_content gnokms_image gnoland_image
+  local sentinel_ref sentinel_digest
   build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   gnokms_content="$(content_hash_for gnokms)"
   gnoland_content="$(content_hash_for gnoland)"
   gnokms_image="${GNOKMS_IMAGE}:$(image_tag_for gnokms "$GNO_COMMIT_HASH")"
   gnoland_image="${GNOLAND_IMAGE}:$(image_tag_for gnoland "$GNO_COMMIT_HASH")"
+  sentinel_ref="$(sentinel_image_ref)"
+  # Prefer local digest (what's actually pulled); fall back to remote.
+  # Either empty string is acceptable — drift summary treats empty as "unknown".
+  sentinel_digest="$(sentinel_local_digest)"
+  [[ -z "$sentinel_digest" ]] && sentinel_digest="$(sentinel_remote_digest)"
 
   local tmp
   tmp="$(mktemp "${out_file}.tmp.XXXXXX")" || return 1
@@ -268,6 +274,9 @@ write_build_state() {
     echo ""
     echo "GNOKMS_IMAGE_TAG=\"${gnokms_image}\""
     echo "GNOLAND_IMAGE_TAG=\"${gnoland_image}\""
+    echo ""
+    echo "SENTINEL_IMAGE_REF=\"${sentinel_ref}\""
+    echo "SENTINEL_IMAGE_DIGEST=\"${sentinel_digest}\""
   } >"$tmp"; then
     rm -f "$tmp"
     return 1
@@ -296,6 +305,8 @@ read_build_state_as_prev() {
     printf 'PREV_GNOLAND_CONTENT_HASH=%q\n' "${GNOLAND_CONTENT_HASH:-}"
     printf 'PREV_GNOKMS_IMAGE_TAG=%q\n' "${GNOKMS_IMAGE_TAG:-}"
     printf 'PREV_GNOLAND_IMAGE_TAG=%q\n' "${GNOLAND_IMAGE_TAG:-}"
+    printf 'PREV_SENTINEL_IMAGE_REF=%q\n' "${SENTINEL_IMAGE_REF:-}"
+    printf 'PREV_SENTINEL_IMAGE_DIGEST=%q\n' "${SENTINEL_IMAGE_DIGEST:-}"
   )
 }
 
@@ -327,6 +338,27 @@ build_state_drift_summary() {
   if [[ "${PREV_GNOLAND_CONTENT_HASH:-}" != "${curr_gnoland}" ]]; then
     echo "  gnoland image content changed (Dockerfile or docker/gnoland-entrypoint.sh)"
     drift=1
+  fi
+
+  # Sentinel: compare stored digest against current remote (when the tag isn't
+  # a pinned digest — pinned digests have no drift by definition).
+  if ! sentinel_tag_is_digest; then
+    local curr_sentinel_ref curr_remote
+    curr_sentinel_ref="$(sentinel_image_ref)"
+    curr_remote="$(sentinel_remote_digest)"
+    if [[ -n "$curr_remote" ]]; then
+      if [[ "${PREV_SENTINEL_IMAGE_REF:-}" != "${curr_sentinel_ref}" ]]; then
+        echo "  sentinel image tag changed: ${PREV_SENTINEL_IMAGE_REF:-<none>} → ${curr_sentinel_ref}"
+        drift=1
+      elif [[ -n "${PREV_SENTINEL_IMAGE_DIGEST:-}" &&
+        "${PREV_SENTINEL_IMAGE_DIGEST}" != "${curr_remote}" ]]; then
+        local prev_short="${PREV_SENTINEL_IMAGE_DIGEST#sha256:}"
+        local curr_short="${curr_remote#sha256:}"
+        echo "  sentinel image advanced on ${curr_sentinel_ref##*:}: ${prev_short:0:12} → ${curr_short:0:12}"
+        drift=1
+      fi
+    fi
+    # curr_remote empty → registry unreachable; skip silently.
   fi
 
   return "$drift"
