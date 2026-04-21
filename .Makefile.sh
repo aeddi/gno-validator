@@ -263,16 +263,16 @@ build_state_drift_summary() {
   local curr_gnokms curr_gnoland
   curr_gnokms="$(content_hash_for gnokms)"
   curr_gnoland="$(content_hash_for gnoland)"
-  if [[ -n "${PREV_GNOKMS_CONTENT_HASH:-}" && "${PREV_GNOKMS_CONTENT_HASH}" != "${curr_gnokms}" ]]; then
+  if [[ "${PREV_GNOKMS_CONTENT_HASH:-}" != "${curr_gnokms}" ]]; then
     echo "  gnokms image content changed (Dockerfile or docker/gnokms-entrypoint.sh)"
     drift=1
   fi
-  if [[ -n "${PREV_GNOLAND_CONTENT_HASH:-}" && "${PREV_GNOLAND_CONTENT_HASH}" != "${curr_gnoland}" ]]; then
+  if [[ "${PREV_GNOLAND_CONTENT_HASH:-}" != "${curr_gnoland}" ]]; then
     echo "  gnoland image content changed (Dockerfile or docker/gnoland-entrypoint.sh)"
     drift=1
   fi
 
-  return $drift
+  return "$drift"
 }
 
 # ---- Drift helpers
