@@ -58,8 +58,6 @@ services:
     depends_on:
       gnokms:
         condition: service_started
-      sentinel:
-        condition: service_started
     cap_add:
       - SYS_TIME
     restart: on-failure
