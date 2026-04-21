@@ -5,5 +5,5 @@ domain=
 # Each entry creates a subdomain and a link on the landing page,
 # (e.g. rpc.mydomain.com).
 rpc=26657
-grafana=3000
-gnockpit=8080
+# gnockpit is not shipped with this repo — install separately, then uncomment:
+# gnockpit=8080

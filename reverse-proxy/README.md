@@ -14,19 +14,19 @@ A landing page at the root domain links to all configured services.
 
 Create one unproxied A record per service pointing to your server's IP:
 
-| Name | Type | Value |
-|------|------|-------|
-| `<domain>` | A | server IP |
-| `<service>.<domain>` | A | server IP (one per service in `config`) |
+| Name                 | Type | Value                                   |
+| -------------------- | ---- | --------------------------------------- |
+| `<domain>`           | A    | server IP                               |
+| `<service>.<domain>` | A    | server IP (one per service in `config`) |
 
 > Records must be **unproxied** (grey cloud on Cloudflare) so Let's Encrypt can reach the server directly.
 
 ## Ports to open
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 80   | TCP | Let's Encrypt ACME challenge + HTTP→HTTPS redirect |
-| 443  | TCP/UDP | HTTPS |
+| Port | Protocol | Purpose                                            |
+| ---- | -------- | -------------------------------------------------- |
+| 80   | TCP      | Let's Encrypt ACME challenge + HTTP→HTTPS redirect |
+| 443  | TCP/UDP  | HTTPS                                              |
 
 > **Note:** Port `26656` (P2P) is unrelated to this proxy — Caddy does not handle P2P traffic. Open it separately on your server so your validator node is reachable by peers.
 
@@ -42,12 +42,11 @@ Edit `config` and set:
 - `domain` — server domain, e.g. `gnoland1.mydomain.com`
 - services (name=port pairs) — add, remove, or rename entries as needed
 
-In the root `.env`, restrict RPC and Grafana to the loopback interface so they
-are only reachable through the reverse proxy:
+In the root `.env`, restrict RPC to the loopback interface so it is only
+reachable through the reverse proxy:
 
 ```sh
 GNOLAND_RPC_LADDR=127.0.0.1
-GRAFANA_LADDR=127.0.0.1
 ```
 
 Then start:
@@ -61,10 +60,10 @@ then starts Caddy. Caddy obtains certificates on first start; renewals are fully
 
 ## Operations
 
-| Command | Description |
-|---------|-------------|
-| `make up` | Start Caddy (also applies config changes) |
-| `make down` | Stop and remove containers |
-| `make restart` | Reload Caddyfile without downtime |
-| `make logs` | Follow Caddy logs |
-| `make status` | Show container status |
+| Command        | Description                               |
+| -------------- | ----------------------------------------- |
+| `make up`      | Start Caddy (also applies config changes) |
+| `make down`    | Stop and remove containers                |
+| `make restart` | Reload Caddyfile without downtime         |
+| `make logs`    | Follow Caddy logs                         |
+| `make status`  | Show container status                     |
