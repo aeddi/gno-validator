@@ -548,8 +548,20 @@ cmd_gen_identity() {
 }
 
 cmd_infos() {
-  ensure_image "$GNOLAND_IMAGE" gnoland
-  ensure_image "$GNOKMS_IMAGE" gnokms
+  # infos is a read-only inspection command — never trigger a build from here.
+  # If images are missing, point the operator at the commands that do build.
+  local missing=()
+  docker image inspect "$GNOLAND_IMAGE" >/dev/null 2>&1 || missing+=("$GNOLAND_IMAGE")
+  docker image inspect "$GNOKMS_IMAGE" >/dev/null 2>&1 || missing+=("$GNOKMS_IMAGE")
+  if ((${#missing[@]} > 0)); then
+    echo "Error: required image(s) not built yet:" >&2
+    local m
+    for m in "${missing[@]}"; do echo "  - $m" >&2; done
+    echo "" >&2
+    echo "Run 'make build' (or 'make start' on first use) to build them." >&2
+    exit 1
+  fi
+
   mkdir -p "${GNOLAND_DATA}/config" "${GNOLAND_DATA}/secrets"
 
   echo "=== Identity ==="
