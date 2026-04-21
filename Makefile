@@ -13,23 +13,24 @@
 #   reset                    Wipe chain state (db, wal, priv_validator_state.json) with
 #                            interactive prompts to stop/start containers around the reset.
 #
-# Build (usually automatic via start/update; run manually for CI or debugging):
-#   build    [force=1]       Build missing images; skip images whose labels match the
-#                            current build inputs (commit, Dockerfile, entrypoints).
-#
 # Inspection:
+#   status   [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                    Print node identity, network config, build metadata, checksums
-#   status                   Show container status
 #   logs-gnoland  [SINCE=<d>] Open interactive log TUI — downloads lnav on first run (default: 1h)
 #   logs-gnokms              Follow gnokms logs
 #   logs-telemetry           Follow logs for all telemetry services
 #
-# Other:
+# Cleanup:
+#   clean-imgs  [yes=1]      Remove all gno-validator Docker images (yes=1 skips the prompt)
+#
+# Setup / build:
 #   gen-identity             Generate the validator signing identity in the gnokms keystore
+#   build    [force=1]       Build missing images; skip when .build-state matches current inputs.
+#                            Normally automatic via start/update; run manually for CI or debugging.
 #   help                     Show this help message
 #
 # Configuration:
-#   .env                     Environment variables (copy from .env.example)
+#   validator.env            Environment variables (copy from validator.env.example)
 #   config.overrides         Per-node gnoland config (copy from config.overrides.example)
 #   genesis.json             Chain genesis file (user-provided)
 
@@ -39,14 +40,17 @@ SHELL := /bin/bash
 export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
-# force=1 on the make command line flips FORCE=1 in the script env.
+# Arg → env pass-through: `make build force=1` → FORCE=1, `make status watch=5` → WATCH=5,
+# `make clean-imgs yes=1` → YES=1.
 export FORCE := $(force)
+export WATCH := $(watch)
+export YES   := $(yes)
 
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
 .PHONY: help gen-identity infos build start stop restart update reset \
-        logs-gnoland logs-gnokms logs-telemetry status
+        logs-gnoland logs-gnokms logs-telemetry status clean-imgs
 
 help:
 	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
@@ -86,3 +90,6 @@ logs-telemetry:
 
 status:
 	@$(SCRIPT) status
+
+clean-imgs:
+	@$(SCRIPT) clean-imgs
