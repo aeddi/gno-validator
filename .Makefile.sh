@@ -483,52 +483,39 @@ EOF
 # Print a drift report comparing current filesystem state against the running
 # gnoland container and the images. Exits silently if no containers exist yet.
 drift_report() {
-  # Only makes sense if the gnoland container has been created at least once.
-  if ! docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
-    return 0
+  # Print a drift report comparing current filesystem state against the last
+  # .build-state snapshot and the running gnoland container. Returns silently
+  # if there's nothing to say. Does NOT hit docker unless a container exists.
+
+  # Resolve the current commit so build_state_drift_summary has something to
+  # compare to. Offline callers get an empty commit and only content drift
+  # is reported (still useful).
+  local repo version commit
+  repo="$(env_get GNO_REPO gnolang/gno)"
+  version="$(env_get GNO_VERSION master)"
+  commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1 || true)"
+  export GNO_REPO="$repo" GNO_VERSION="$version" GNO_COMMIT_HASH="$commit"
+
+  # Build-state drift (covers commit/version/repo + content hashes).
+  local summary has_drift=0
+  if eval "$(read_build_state_as_prev 2>/dev/null)"; then
+    summary="$(build_state_drift_summary)" || has_drift=$?
+    if ((has_drift == 1)); then
+      echo "Drift detected since last build (${PREV_BUILD_DATE:-unknown}):"
+      echo "$summary"
+      echo ""
+      echo "  Run 'make update' to rebuild and restart."
+      echo ""
+    fi
   fi
 
-  local cname="gno-validator-gnoland-1"
-  local -a needs_update=() needs_restart=()
-
-  # Build inputs (images): compare to image .Created.
-  if [[ -f Dockerfile ]] && file_newer_than_docker Dockerfile "$GNOLAND_IMAGE" .Created; then
-    needs_update+=("Dockerfile modified since gnoland image was built")
-  fi
-  if [[ -f docker/gnoland-entrypoint.sh ]] && file_newer_than_docker docker/gnoland-entrypoint.sh "$GNOLAND_IMAGE" .Created; then
-    needs_update+=("docker/gnoland-entrypoint.sh modified since image was built")
-  fi
-  if [[ -f docker/gnokms-entrypoint.sh ]] && file_newer_than_docker docker/gnokms-entrypoint.sh "$GNOKMS_IMAGE" .Created; then
-    needs_update+=("docker/gnokms-entrypoint.sh modified since gnokms image was built")
-  fi
-
-  # Runtime inputs: compare to container .Created.
-  if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
-    needs_update+=("$ENV_FILE modified since containers were created")
-  fi
-  if file_newer_than_docker docker-compose.yml "$cname" .Created; then
-    needs_update+=("docker-compose.yml modified since containers were created")
-  fi
-
-  # config.overrides re-applies on every container start.
-  if [[ -f "$OVERRIDES_FILE" ]] && file_newer_than_docker "$OVERRIDES_FILE" "$cname" .State.StartedAt; then
-    needs_restart+=("config.overrides modified since last container start — will be re-applied this start")
-  fi
-
-  if ((${#needs_update[@]} > 0)); then
-    echo "Drift detected (requires 'make update' to fully apply):"
-    local line
-    for line in "${needs_update[@]}"; do
-      echo "  - $line"
-    done
-    echo ""
-  fi
-  if ((${#needs_restart[@]} > 0)); then
-    local line
-    for line in "${needs_restart[@]}"; do
-      echo "Info: $line"
-    done
-    echo ""
+  # config.overrides re-applies on every container start — informational only.
+  if docker container inspect gno-validator-gnoland-1 >/dev/null 2>&1; then
+    if [[ -f "$OVERRIDES_FILE" ]] &&
+      file_newer_than_docker "$OVERRIDES_FILE" gno-validator-gnoland-1 .State.StartedAt; then
+      echo "Info: ${OVERRIDES_FILE} modified since last container start — will be re-applied this start."
+      echo ""
+    fi
   fi
 }
 
