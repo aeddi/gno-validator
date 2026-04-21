@@ -891,14 +891,16 @@ cmd_reset() {
 
 cmd_clean_imgs() {
   local skip_prompt="${YES:-0}"
-  # Collect all image tags for our two repositories. Matches e.g.
-  # gno-validator-gnokms:latest, gno-validator-gnokms:abc123-def456.
+  # Collect all tags for our two repositories. `docker images` accepts only
+  # one [REPOSITORY[:TAG]] arg at a time, so we invoke it twice and merge.
   local -a images=()
   local line
   while IFS= read -r line; do
     [[ -n "$line" ]] && images+=("$line")
-  done < <(docker images --format '{{.Repository}}:{{.Tag}}' \
-    "$GNOKMS_IMAGE" "$GNOLAND_IMAGE" 2>/dev/null | sort -u)
+  done < <({
+    docker images --format '{{.Repository}}:{{.Tag}}' "$GNOKMS_IMAGE"
+    docker images --format '{{.Repository}}:{{.Tag}}' "$GNOLAND_IMAGE"
+  } | sort -u)
 
   if ((${#images[@]} == 0)); then
     echo "No gno-validator images to remove."
@@ -923,7 +925,7 @@ cmd_clean_imgs() {
     fi
   fi
 
-  docker rmi -f "${images[@]}"
+  docker rmi -f -- "${images[@]}"
   echo "Removed ${#images[@]} image(s)."
 }
 
