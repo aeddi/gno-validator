@@ -34,15 +34,15 @@ LNAV_BIN=".lnav/bin/lnav"
 export HOST_UID="${HOST_UID:-$(id -u)}"
 export HOST_GID="${HOST_GID:-$(id -g)}"
 
-# ---- .env helpers
+# ---- validator.env helpers
 
-# Print the raw value of KEY from .env (preserves whitespace, empty if unset).
+# Print the raw value of KEY from validator.env (preserves whitespace, empty if unset).
 env_get_raw() {
   [[ -f "$ENV_FILE" ]] || return 0
   grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true
 }
 
-# Print KEY from .env with all whitespace stripped and a default fallback.
+# Print KEY from validator.env with all whitespace stripped and a default fallback.
 # Use for config values (ports, IPs, repo slugs); use env_get_raw for secrets
 # where a legitimate space must be preserved.
 env_get() {
@@ -52,17 +52,17 @@ env_get() {
   printf '%s\n' "${value:-${2:-}}"
 }
 
-# True if .env has `KEY=<non-empty>`.
+# True if validator.env has `KEY=<non-empty>`.
 env_has_value() {
   [[ -f "$ENV_FILE" ]] && grep -qE "^$1=.+" "$ENV_FILE" 2>/dev/null
 }
 
-# True if .env has a line starting with `KEY=VALUE`.
+# True if validator.env has a line starting with `KEY=VALUE`.
 env_matches() {
   [[ -f "$ENV_FILE" ]] && grep -qE "^$1=$2" "$ENV_FILE" 2>/dev/null
 }
 
-# Prompt silently for VAR if not set in the environment and not present in .env.
+# Prompt silently for VAR if not set in the environment and not present in validator.env.
 # On success, exports VAR so child processes (_compose) pick it up.
 prompt_password_if_unset() {
   local var="$1"
@@ -282,7 +282,7 @@ install_lnav() {
 # gnokms keystore, then runs `_compose up -d`.
 _fresh_up() {
   [[ -f "$ENV_FILE" ]] || {
-    echo "Error: .env not found. Run: cp .env.example .env" >&2
+    echo "Error: $ENV_FILE not found. Run: cp validator.env.example $ENV_FILE" >&2
     exit 1
   }
 
@@ -332,7 +332,7 @@ drift_report() {
 
   # Runtime inputs: compare to container .Created.
   if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
-    needs_update+=(".env modified since containers were created")
+    needs_update+=("$ENV_FILE modified since containers were created")
   fi
   if file_newer_than_docker docker-compose.yml "$cname" .Created; then
     needs_update+=("docker-compose.yml modified since containers were created")
@@ -639,7 +639,7 @@ cmd_update() {
   if docker container inspect "$cname" >/dev/null 2>&1; then
     if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
       need_recreate=1
-      reasons+=(".env modified since containers were created")
+      reasons+=("$ENV_FILE modified since containers were created")
     fi
     if file_newer_than_docker docker-compose.yml "$cname" .Created; then
       need_recreate=1
