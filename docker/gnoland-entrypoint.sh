@@ -29,7 +29,7 @@ gnoland config set rpc.laddr tcp://0.0.0.0:26657 >/dev/null
 gnoland config set consensus.priv_validator.remote_signer.server_address unix:///sock/gnokms.sock >/dev/null
 gnoland config set telemetry.metrics_enabled true >/dev/null
 gnoland config set telemetry.traces_enabled true >/dev/null
-gnoland config set telemetry.exporter_endpoint http://otelcol:4318 >/dev/null
+gnoland config set telemetry.exporter_endpoint http://sentinel:4318 >/dev/null
 
 # ---- Start node: sync clock and handle early start flag
 if [ "$2" = "start" ]; then

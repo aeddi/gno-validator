@@ -9,7 +9,7 @@
 # consensus.priv_validator.remote_signer.server_address  = "unix:///sock/gnokms.sock"   # gnokms socket
 # telemetry.metrics_enabled                              = true
 # telemetry.traces_enabled                               = true
-# telemetry.exporter_endpoint                            = "http://otelcol:4318"
+# telemetry.exporter_endpoint                            = "http://sentinel:4318"
 
 # ---- Required node settings
 moniker = "anon-val-01"
