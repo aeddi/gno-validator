@@ -1,5 +1,5 @@
 # Local secrets
-.env
+validator.env
 
 # Node config — gitignored so each operator's settings stay local
 config.overrides
