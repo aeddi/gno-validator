@@ -9,12 +9,17 @@
 # Commands: gen-identity, infos, build, start, stop, restart, logs-gnoland,
 #           logs-gnokms, logs-sentinel, status, reset, update
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "Error: command failed (line ${LINENO}): ${BASH_COMMAND}" >&2' ERR
 
 # ---- Globals
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
+
+# Cached once so platform switches (stat, date, ...) don't re-fork `uname`.
+UNAME_S="$(uname -s)"
+readonly UNAME_S
 
 ENV_FILE="validator.env"
 STATE_FILE=".build-state"
@@ -41,9 +46,12 @@ export HOST_GID="${HOST_GID:-$(id -g)}"
 # ---- validator.env helpers
 
 # Print the raw value of KEY from validator.env (preserves whitespace, empty if unset).
+# Uses awk with literal string comparison so keys with regex metacharacters
+# (.  * [ etc.) are matched safely.
 env_get_raw() {
   [[ -f "$ENV_FILE" ]] || return 0
-  grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true
+  awk -v k="$1" 'index($0, k"=") == 1 { print substr($0, length(k) + 2); exit }' \
+    "$ENV_FILE" 2>/dev/null || true
 }
 
 # Print KEY from validator.env with all whitespace stripped and a default fallback.
@@ -58,7 +66,10 @@ env_get() {
 
 # True if validator.env has `KEY=<non-empty>`.
 env_has_value() {
-  [[ -f "$ENV_FILE" ]] && grep -qE "^$1=.+" "$ENV_FILE" 2>/dev/null
+  [[ -f "$ENV_FILE" ]] || return 1
+  local value
+  value="$(env_get_raw "$1")"
+  [[ -n "$value" ]]
 }
 
 # Prompt silently for VAR if not set in the environment and not present in validator.env.
@@ -123,6 +134,13 @@ sha256_of_file() {
   fi
 }
 
+# True if DIR exists and contains at least one entry. Uses `find -quit` to
+# avoid parsing `ls` output. Portable across GNU and BSD find.
+dir_has_entries() {
+  [[ -d "$1" ]] || return 1
+  [[ -n "$(find "$1" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]
+}
+
 # ---- Sentinel image helpers
 
 # Print the full sentinel image reference built from validator.env's
@@ -165,8 +183,9 @@ sentinel_remote_digest() {
     digest="$(printf '%s' "$out" | "$jq_bin" -r '.manifests[0].digest // .config.digest // empty' 2>/dev/null || true)"
   fi
   if [[ -z "$digest" ]]; then
-    # grep the first "digest" field — works for both schema variants.
-    digest="$(printf '%s' "$out" | grep -m1 -Eo '"digest"[[:space:]]*:[[:space:]]*"sha256:[a-f0-9]{64}"' | grep -Eo 'sha256:[a-f0-9]{64}' || true)"
+    # First sha256 in the manifest output is the descriptor digest for both
+    # single-platform and manifest-list schemas. Matches jq's fallback chain.
+    digest="$(printf '%s' "$out" | grep -m1 -Eo 'sha256:[a-f0-9]{64}' || true)"
   fi
   printf '%s\n' "$digest"
 }
@@ -373,11 +392,10 @@ mtime_epoch() {
     echo 0
     return
   }
-  if stat --version >/dev/null 2>&1; then
-    stat -c %Y "$1"
-  else
-    stat -f %m "$1"
-  fi
+  case "$UNAME_S" in
+  Darwin | *BSD) stat -f %m "$1" ;;
+  *) stat -c %Y "$1" ;;
+  esac
 }
 
 # Convert a Docker ISO-8601 timestamp ('2026-04-14T14:39:21.555Z' or with offset)
@@ -502,7 +520,8 @@ install_jq() {
   esac
 
   mkdir -p "$TOOLS_BIN_DIR"
-  local tmp="${JQ_BIN}.tmp.$$"
+  local tmp
+  tmp="$(mktemp "${JQ_BIN}.XXXXXX")"
   echo "Downloading jq v${JQ_VERSION}..." >&2
   if ! _download_url \
     "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/${asset}" \
@@ -563,13 +582,11 @@ Started. The gnoland entrypoint regenerates config on every start:
 EOF
 }
 
-# Print a drift report comparing current filesystem state against the running
-# gnoland container and the images. Exits silently if no containers exist yet.
+# Print a drift report comparing current filesystem state (build-state snapshot
+# + config.overrides) against the last build and the running gnoland container.
+# Silent when there's nothing to say. Does NOT hit docker unless a container
+# exists.
 drift_report() {
-  # Print a drift report comparing current filesystem state against the last
-  # .build-state snapshot and the running gnoland container. Returns silently
-  # if there's nothing to say. Does NOT hit docker unless a container exists.
-
   # Resolve the current commit so build_state_drift_summary has something to
   # compare to. Offline callers get an empty commit and only content drift
   # is reported (still useful).
@@ -647,9 +664,9 @@ cmd_infos() {
   #   1. Empty/missing → hint at 'make gen-identity'.
   #   2. Populated but gnokms holds the DB lock → transient; retry shortly.
   #   3. Populated and readable → parse gnokey list output.
-  local gnokey_out=""
-  if [[ -d "${GNOKMS_DATA}/keystore" ]] &&
-    [[ -n "$(ls -A "${GNOKMS_DATA}/keystore" 2>/dev/null)" ]]; then
+  local gnokey_out="" has_keys=0
+  if dir_has_entries "${GNOKMS_DATA}/keystore"; then
+    has_keys=1
     gnokey_out="$(docker run --rm \
       --entrypoint gnokey \
       -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
@@ -664,8 +681,7 @@ cmd_infos() {
         }
         print "validator address: " addr "\nvalidator pub_key: " pub
     }'
-  elif [[ ! -d "${GNOKMS_DATA}/keystore" ]] ||
-    [[ -z "$(ls -A "${GNOKMS_DATA}/keystore" 2>/dev/null)" ]]; then
+  elif ((!has_keys)); then
     echo "validator address: (no keystore — run 'make gen-identity')"
     echo "validator pub_key: (no keystore — run 'make gen-identity')"
   else
