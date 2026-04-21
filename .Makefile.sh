@@ -132,48 +132,45 @@ sha256_of_file() {
   fi
 }
 
-# ---- Build-hash helpers
+# ---- Image tag + content-hash helpers
 
-# Print the build input hash for an image target.
-# KIND is 'gnokms' or 'gnoland'; the function knows which entrypoint to hash.
-# Output format: "<label>=<value>" lines, so callers can compare with `docker inspect`.
-image_input_hashes() {
+# Compute an 8-character content hash from the concatenated content of all
+# given files. Deterministic under fixed input order (callers always pass the
+# same files in the same order per image target).
+compute_content_hash() {
+  local hash_tool
+  if command -v sha256sum >/dev/null 2>&1; then
+    hash_tool=sha256sum
+  else
+    hash_tool="shasum -a 256"
+  fi
+  cat "$@" | $hash_tool | cut -c1-8
+}
+
+# Compute the content hash for a given image kind ('gnokms' or 'gnoland').
+# Each image hashes its Dockerfile + its own entrypoint, so an edit to one
+# entrypoint does not force a rebuild of the other image.
+content_hash_for() {
   local kind="$1"
-  local entrypoint
   case "$kind" in
-  gnokms) entrypoint="docker/gnokms-entrypoint.sh" ;;
-  gnoland) entrypoint="docker/gnoland-entrypoint.sh" ;;
+  gnokms) compute_content_hash Dockerfile docker/gnokms-entrypoint.sh ;;
+  gnoland) compute_content_hash Dockerfile docker/gnoland-entrypoint.sh ;;
   *)
-    echo "image_input_hashes: unknown kind '$kind'" >&2
+    echo "content_hash_for: unknown kind '$kind'" >&2
     return 1
     ;;
   esac
-  printf 'build.commit=%s\n' "${GNO_COMMIT_HASH:-}"
-  printf 'build.version=%s\n' "${GNO_VERSION:-}"
-  printf 'build.repo=%s\n' "${GNO_REPO:-}"
-  printf 'build.dockerfile_hash=%s\n' "$(sha256_of_file Dockerfile)"
-  printf 'build.entrypoint_hash=%s\n' "$(sha256_of_file "$entrypoint")"
 }
 
-# Returns 0 (true) if the image needs to be rebuilt because any non-date build
-# input differs from what's labeled on the current image. Prints the specific
-# labels that changed to stderr so callers can include them in messages.
-image_needs_rebuild() {
-  local image="$1" kind="$2"
-  # No image at all → must build.
-  if ! docker image inspect "$image" >/dev/null 2>&1; then
-    echo "  ${kind}: no image" >&2
-    return 0
-  fi
-  local expected actual key value drift=0
-  while IFS='=' read -r key value; do
-    actual="$(image_label "$image" "$key")"
-    if [[ "$actual" != "$value" ]]; then
-      echo "  ${kind}: ${key} differs (image: '${actual:-<unset>}', current: '${value:-<unset>}')" >&2
-      drift=1
-    fi
-  done < <(image_input_hashes "$kind")
-  return $((drift == 0))
+# Compute the full content-addressable image tag for an image kind:
+#   <gno_commit_12>-<content_hash_8>
+# Callers must pass the resolved 40-char commit hash as $2 so the prefix is
+# stable regardless of how many chars are in GNO_COMMIT_HASH.
+image_tag_for() {
+  local kind="$1" commit="$2"
+  local content
+  content="$(content_hash_for "$kind")"
+  printf '%s-%s\n' "${commit:0:12}" "$content"
 }
 
 # ---- Drift helpers
