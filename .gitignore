@@ -4,6 +4,9 @@ validator.env
 # Node config — gitignored so each operator's settings stay local
 config.overrides
 
+# Sentinel config — local to each operator (watchtower URL + token)
+sentinel.toml
+
 # Generated at runtime — not tracked (genesis.json is ~200 MB)
 genesis.json
 

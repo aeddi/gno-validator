@@ -1,0 +1,57 @@
+# Sentinel config for gno-validator.
+# Copy to sentinel.toml (gitignored) and fill in <placeholders> before 'make start'.
+# Reference: https://github.com/aeddi/gno-watchtower
+
+# Connection to the watchtower server (or an intermediate beacon).
+# Required — replace both placeholders with the URL + shared token issued by the
+# watchtower operator. Leaving placeholders unchanged causes sentinel to crash-loop
+# with a clear validation error.
+[server]
+url = '<watchtower-url>'
+token = '<watchtower-token>'
+
+# RPC status collector — polls gnoland's /status + related endpoints in-network.
+[rpc]
+enabled = true
+poll_interval = '3s'
+rpc_url = 'http://gnoland:26657'
+dump_consensus_state_interval = '30s'
+
+# Log collector — reads gnoland's container logs via the mounted docker socket.
+[logs]
+enabled = true
+source = 'docker'
+container_name = 'gno-validator-gnoland-1'
+batch_size = '1MB'
+batch_timeout = '5s'
+min_level = 'debug'
+resume_lookback = '1m0s'
+
+# OpenTelemetry relay — gnoland-entrypoint.sh points telemetry.exporter_endpoint
+# at http://sentinel:4318, which sentinel receives here and forwards.
+[otlp]
+enabled = true
+listen_addr = '0.0.0.0:4318'
+
+# System resource monitor — host + gnoland container metrics.
+[resources]
+enabled = true
+poll_interval = '10s'
+source = 'both'
+container_name = 'gno-validator-gnoland-1'
+
+# Config metadata collector — periodically captures gnoland config values.
+[metadata]
+enabled = true
+check_interval = '10m0s'
+config_get_cmd = 'docker exec gno-validator-gnoland-1 gnoland config get %s -config-path /gnoland-data/config/config.toml'
+
+# Sentinel self-stats collector.
+[self]
+enabled = true
+report_interval = '30s'
+
+# Sentinel health endpoint — in-container only; no host port is exposed.
+[health]
+enabled = true
+listen_addr = '127.0.0.1:8081'
