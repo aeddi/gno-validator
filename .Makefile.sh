@@ -778,16 +778,22 @@ cmd_status() {
   fi
 
   # Watch mode — hide cursor, clear screen, loop with ANSI redraw.
+  # Wrap in a subshell so the EXIT trap is scoped to this block: bash traps are
+  # shell-global, and we don't want cmd_status's cursor-restore to fire on the
+  # parent shell's final exit if a future caller invokes cmd_status and keeps
+  # running.
   local eol=$'\033[K'
-  printf '\033[?25l'
-  trap 'printf "\033[?25h\n"' EXIT INT TERM
-  printf '\033[2J'
-  while true; do
-    printf '\033[H'
-    printf "Refreshing every %ss (Ctrl+C to stop)${eol}\n\n" "$watch_interval"
-    _status_render "$rpc_port" "$jq_bin" "$eol"
-    sleep "$watch_interval"
-  done
+  (
+    trap 'printf "\033[?25h\n"' EXIT INT TERM
+    printf '\033[?25l'
+    printf '\033[2J'
+    while true; do
+      printf '\033[H'
+      printf "Refreshing every %ss (Ctrl+C to stop)${eol}\n\n" "$watch_interval"
+      _status_render "$rpc_port" "$jq_bin" "$eol"
+      sleep "$watch_interval"
+    done
+  )
 }
 
 # Render a one-row status table. `eol` is optional; in watch mode, pass
