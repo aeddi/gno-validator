@@ -166,7 +166,7 @@ sentinel_remote_digest() {
   fi
   if [[ -z "$digest" ]]; then
     # grep the first "digest" field — works for both schema variants.
-    digest="$(printf '%s' "$out" | grep -m1 -Eo '"digest"\s*:\s*"sha256:[a-f0-9]{64}"' | grep -Eo 'sha256:[a-f0-9]{64}' || true)"
+    digest="$(printf '%s' "$out" | grep -m1 -Eo '"digest"[[:space:]]*:[[:space:]]*"sha256:[a-f0-9]{64}"' | grep -Eo 'sha256:[a-f0-9]{64}' || true)"
   fi
   printf '%s\n' "$digest"
 }
