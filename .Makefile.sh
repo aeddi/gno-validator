@@ -61,11 +61,6 @@ env_has_value() {
   [[ -f "$ENV_FILE" ]] && grep -qE "^$1=.+" "$ENV_FILE" 2>/dev/null
 }
 
-# True if validator.env has a line starting with `KEY=VALUE`.
-env_matches() {
-  [[ -f "$ENV_FILE" ]] && grep -qE "^$1=$2" "$ENV_FILE" 2>/dev/null
-}
-
 # Prompt silently for VAR if not set in the environment and not present in validator.env.
 # On success, exports VAR so child processes (_compose) pick it up.
 prompt_password_if_unset() {
