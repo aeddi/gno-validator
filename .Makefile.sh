@@ -801,46 +801,51 @@ cmd_update() {
   local force="${FORCE:-0}"
   local cname="gno-validator-gnoland-1"
 
-  # Decide what needs to happen.
-  local need_rebuild=0 need_recreate=0
-  local -a reasons=()
-
-  # Determine current commit (same logic as cmd_build).
+  # Resolve current commit for drift comparison.
   local repo version commit
   repo="$(env_get GNO_REPO gnolang/gno)"
   version="$(env_get GNO_VERSION master)"
   commit="$(git ls-remote "https://github.com/${repo}.git" "$version" 2>/dev/null | awk '{print $1}' | head -1 || true)"
-  commit="${commit:-$version}"
+  export GNO_REPO="$repo" GNO_VERSION="$version" GNO_COMMIT_HASH="${commit:-$version}"
 
-  # Check image drift (build inputs).
-  export GNO_REPO="$repo" GNO_VERSION="$version" GNO_COMMIT_HASH="$commit"
-  export DOCKERFILE_HASH="$(sha256_of_file Dockerfile)"
-  if image_needs_rebuild "$GNOKMS_IMAGE" gnokms 2>/dev/null; then
+  # Decide what's needed.
+  local need_rebuild=0 need_recreate=0
+  local -a reasons=()
+
+  # Build-state drift → rebuild. Capture the command-sub exit status via the
+  # assignment so a missing state file correctly reports "state missing".
+  local prev_state
+  if prev_state="$(read_build_state_as_prev 2>/dev/null)"; then
+    eval "$prev_state"
+    local summary
+    if summary="$(build_state_drift_summary)" && [[ -n "$summary" ]]; then
+      need_rebuild=1
+      reasons+=("build inputs changed since last build:")
+      while IFS= read -r line; do
+        reasons+=("  ${line}")
+      done <<<"$summary"
+    fi
+  else
     need_rebuild=1
-    reasons+=("gnokms image out of date")
-  fi
-  if image_needs_rebuild "$GNOLAND_IMAGE" gnoland 2>/dev/null; then
-    need_rebuild=1
-    reasons+=("gnoland image out of date")
+    reasons+=(".build-state missing — no record of last build")
   fi
 
-  # Check runtime drift (recreate triggers).
+  # Runtime drift → recreate (compose.yml / validator.env edited after container created).
   if docker container inspect "$cname" >/dev/null 2>&1; then
     if file_newer_than_docker "$ENV_FILE" "$cname" .Created; then
       need_recreate=1
-      reasons+=("$ENV_FILE modified since containers were created")
+      reasons+=("${ENV_FILE} modified since containers were created")
     fi
     if file_newer_than_docker docker-compose.yml "$cname" .Created; then
       need_recreate=1
       reasons+=("docker-compose.yml modified since containers were created")
     fi
   else
-    # No container yet — recreate implicitly happens via _fresh_up.
     need_recreate=1
     reasons+=("containers not yet created")
   fi
 
-  # If a rebuild is needed we always recreate too (new image → new container).
+  # Rebuild implies recreate (new image → new container).
   ((need_rebuild == 1)) && need_recreate=1
 
   if ((need_rebuild == 0 && need_recreate == 0 && force == 0)); then
@@ -866,8 +871,8 @@ cmd_update() {
   echo ""
   echo "Reasons:"
   local r
-  for r in "${reasons[@]}"; do
-    echo "  - $r"
+  for r in "${reasons[@]:-}"; do
+    [[ -n "$r" ]] && echo "  - $r"
   done
   echo ""
   echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, keys, config), ${GNOKMS_DATA}/ (keystore),"
@@ -887,13 +892,11 @@ cmd_update() {
     cmd_build
     echo ""
   fi
-
   if docker container inspect "$cname" >/dev/null 2>&1; then
     echo "Stopping and removing containers..."
     _compose down
     echo ""
   fi
-
   echo "Creating and starting containers..."
   _fresh_up
 }
