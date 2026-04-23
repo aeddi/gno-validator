@@ -1466,19 +1466,44 @@ cmd_logs() {
   #     { service.name, msg } so gonzo sees one JSON event per line.
   local tag_program='. as $raw | try (fromjson + {"service.name": $s}) catch {"service.name": $s, "msg": $raw}'
 
-  # Run three feeds in parallel backgrounded, merge onto a single stdin,
-  # pipe into gonzo. `wait` keeps the subshell alive until all three feeds
-  # exit (which happens when the user Ctrl+Cs out of gonzo and SIGPIPE
-  # cascades back up the pipeline).
-  {
-    _compose_noenv logs --no-log-prefix -f --since "$since_gnoland" gnoland 2>/dev/null |
-      "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" &
-    _compose_noenv logs --no-log-prefix -f --since "$since_gnokms" gnokms 2>/dev/null |
-      "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" &
-    _compose_noenv logs --no-log-prefix -f --since "$since_sentinel" sentinel 2>/dev/null |
-      "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" &
-    wait
-  } | "$GONZO_BIN" --config "$GONZO_CONFIG"
+  # Architecture: gonzo runs in the FOREGROUND reading from a FIFO; three
+  # feeder pipelines write to that FIFO in the background. When gonzo exits
+  # (user presses q), our EXIT trap kills the feeders — otherwise idle
+  # feeders (gnokms / sentinel with no recent logs) never get SIGPIPE from
+  # the closed downstream pipe and the script hangs waiting on `wait`,
+  # forcing the operator to Ctrl+C after quitting.
+  local fifo
+  fifo="$(mktemp -u "${TMPDIR:-/tmp}/gno-val-logs.XXXXXX")"
+  if ! mkfifo "$fifo" 2>/dev/null; then
+    echo "Error: failed to create fifo at ${fifo}" >&2
+    return 1
+  fi
+
+  local -a _feed_pids=()
+  _cmd_logs_cleanup() {
+    if ((${#_feed_pids[@]} > 0)); then
+      kill -TERM "${_feed_pids[@]}" 2>/dev/null || true
+    fi
+    wait 2>/dev/null || true
+    rm -f "$fifo"
+  }
+  trap _cmd_logs_cleanup EXIT INT TERM
+
+  # Each feeder blocks on FIFO-open-for-write until gonzo opens it for
+  # reading; backgrounding them here lets us run gonzo last and everything
+  # unblocks simultaneously.
+  (_compose_noenv logs --no-log-prefix -f --since "$since_gnoland" gnoland 2>/dev/null |
+    "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" >"$fifo") &
+  _feed_pids+=($!)
+  (_compose_noenv logs --no-log-prefix -f --since "$since_gnokms" gnokms 2>/dev/null |
+    "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" >"$fifo") &
+  _feed_pids+=($!)
+  (_compose_noenv logs --no-log-prefix -f --since "$since_sentinel" sentinel 2>/dev/null |
+    "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" >"$fifo") &
+  _feed_pids+=($!)
+
+  "$GONZO_BIN" --config "$GONZO_CONFIG" <"$fifo"
+  # Trap fires on return and cleans up feeders + fifo.
 }
 
 cmd_status() {

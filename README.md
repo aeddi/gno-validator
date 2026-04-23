@@ -119,11 +119,11 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 ### Inspection
 
-| Command                     | What it does                                                                                                                                                                                                                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails).                                                                                                                                       |
-| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                                                                                                                                                                   |
-| `make logs [since=<d>]`     | Merged TUI of gnoland + gnokms + sentinel logs via [gonzo](https://github.com/control-theory/gonzo). Per-service defaults: gnoland=1h, gnokms/sentinel=24h. `since=X` overrides all three. Inside the TUI: `Ctrl+F` severity, `/` search, `C` toggle columns, `Space` pause, `q` quit. Auto-installed under `.tools/bin/` on first use. |
+| Command                     | What it does                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails).                                                                                                              |
+| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                                                                                                                                          |
+| `make logs [since=<d>]`     | Merged TUI of gnoland + gnokms + sentinel logs via [gonzo](https://github.com/control-theory/gonzo). Per-service defaults: gnoland=1h, gnokms/sentinel=24h. `since=X` overrides all three. See [Gonzo TUI cheatsheet](#gonzo-tui-cheatsheet) for keybindings. Auto-installed under `.tools/bin/` on first use. |
 
 ### Cleanup
 
@@ -137,6 +137,29 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 | ------------------- | --------------------------------------------------------------- |
 | `make gen-identity` | Generate the validator signing identity in the gnokms keystore. |
 | `make help`         | Show the target list.                                           |
+
+### Gonzo TUI cheatsheet
+
+`make logs` opens a gonzo TUI streaming all three services merged. Each line is tagged `service.name=<gnoland|gnokms|sentinel>` for filtering.
+
+| Action                                | Key                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| **Filter by service** (regex)         | `/` then e.g. `gnoland` or `gnoland\|gnokms`, Enter. Empty to reset. |
+| Filter by severity                    | `Ctrl+F` opens the severity modal                                    |
+| Search / highlight                    | `s`                                                                  |
+| Show all fields of current line       | `Enter` (details modal)                                              |
+| Column config (hide Host, add module) | `C` (uppercase) → Space toggles, Enter applies                       |
+| Toggle Host/Service column pair       | `c` (lowercase)                                                      |
+| Toggle log-time vs receive-time       | `T`                                                                  |
+| Pause / resume                        | `Space`                                                              |
+| Navigate rows / sections              | `↑↓` / `j` `k`, `Tab` / `Shift+Tab`                                  |
+| Jump to latest (resume autoscroll)    | `End`                                                                |
+| Quit                                  | `q`                                                                  |
+| Full help                             | `?`                                                                  |
+
+Column tweaks (`C` modal) are **per-session** — gonzo v0.3.2 has no config.yml key for column visibility, so you'll want to uncheck "Host Name" (always empty for us) and tick `module` from Discovered Attributes each time you open the TUI. Upstream hasn't added a config hook yet.
+
+Exclusion (hide one service) isn't supported by gonzo's regex (RE2, no negative lookaround). Work around with inverse inclusion: `gnoland|gnokms` instead of "not sentinel".
 
 ### Change → command cheat sheet
 
