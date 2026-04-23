@@ -11,85 +11,50 @@ A `sentinel` sidecar ships node metrics, logs, and OTLP traces to an external [g
 
 ## Setup
 
-### 1. Configure environment
+Seven-step quick start. Each step links to the matching detailed section below when one exists.
+
+### 1. `validator.env`
+
+Environment variables (image tags, host ports, password handling, gnoland flags). Copy the example and edit — at minimum review `GNOKMS_PASSWORD` handling. See [validator.env reference](#validatorenv-reference) for the full list.
 
 ```sh
 cp validator.env.example validator.env
+$EDITOR validator.env
 ```
 
-Edit `validator.env` and set:
+### 2. `config.overrides`
 
-- `GNOKMS_PASSWORD` — password to decrypt your signing key. Optional: if left empty, `make start` and `make update` will prompt for it at startup. **In production, leave this unset** — see [Password security](#password-security).
-- `GNO_VERSION` — branch, tag, or commit hash to build (default: `master`)
-- `GNO_REPO` — GitHub repo slug to clone gno sources from (default: `gnolang/gno`)
-- `SENTINEL_IMAGE_TAG` — tag or digest for the sentinel image pulled from `ghcr.io/aeddi/gno-watchtower/sentinel` (default: `latest`). Pin a digest (`sha256:...`) for reproducibility; drift is reported when a tag like `latest` advances on the registry.
-- `GNOLAND_RPC_PORT` — host port mapped to gnoland RPC (default: `26657`)
-- `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
-- `GNOLAND_RPC_LADDR` — interface gnoland RPC binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing RPC through a reverse proxy only.
-- `GNOLAND_P2P_LADDR` — interface gnoland P2P binds to (default: `0.0.0.0`). Use `127.0.0.1` only if this node should not accept inbound peer connections.
-- `GNOLAND_EXTRA_FLAGS` — extra flags appended to `gnoland start`, word-split on whitespace. Default: `--skip-genesis-sig-verification`. Add or remove flags as needed (e.g. `--skip-genesis-sig-verification --log-level info`).
-- `GNOLAND_NTP_UPDATE` — any non-empty value enables in-container NTP sync at gnoland startup (tries `ntpd`, then `rdate`, then an HTTP `Date` header; first success wins). Default: `1`. Set empty to skip (useful when the host already runs `chronyd`/`systemd-timesyncd`).
-- `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `3`, i.e. 3 GB total)
-
-### 2. Generate the signing identity
-
-```sh
-make gen-identity
-```
-
-Creates the key `gnokms-docker-key` in `gnokms-data/keystore/`.
-
-- If `GNOKMS_PASSWORD` is set in `validator.env`, it is used automatically (no prompt).
-- Otherwise, `gnokey` will prompt you interactively.
-
-### 3. Configure the node
+Per-node gnoland config (moniker, peers, telemetry labels). Copy the example and fill the required fields. See [config.overrides reference](#configoverrides-reference).
 
 ```sh
 cp config.overrides.example config.overrides
 $EDITOR config.overrides
 ```
 
-Set the required fields:
+### 3. `sentinel.toml`
 
-- `moniker` — human-readable node name
-- `p2p.external_address` — your public P2P address, e.g. `<your-ip>:26656`
-- `p2p.persistent_peers` — comma-separated peers to maintain persistent connections to
-- `telemetry.service_instance_id` — node identifier tagged on OTLP traces (e.g. your moniker)
-- `telemetry.service_name` — service identifier tagged on OTLP traces (e.g. the chain ID)
-
-Optional — add any other gnoland config keys (e.g. `p2p.seeds`, `consensus.timeout_commit`). The commented block at the top of `config.overrides.example` lists the system-hardcoded keys that the entrypoint always overrides.
-
-Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` on every
-node start and `make infos` run. Mandatory settings (remote signer, telemetry) are
-applied after and override any conflicting entries. `config.overrides` is gitignored — it
-stays local to each operator.
-
-### 4. Provide genesis.json
-
-Copy your `genesis.json` to the repo root before starting the node:
-
-```sh
-cp /path/to/genesis.json .
-```
-
-### 5. Configure sentinel
-
-The sentinel sidecar ships node metrics/logs/traces to an external watchtower
-server (see [gno-watchtower](https://github.com/aeddi/gno-watchtower)). Ask the
-watchtower operator for the server URL and an authentication token, then:
+Sentinel sidecar config. Ask your watchtower operator for the server URL and auth token, then copy the example and set `server.url` / `server.token` — leaving the `<placeholders>` unchanged causes the sentinel container to crash-loop with a clear validation error at startup. Full field reference: [gno-watchtower](https://github.com/aeddi/gno-watchtower).
 
 ```sh
 cp sentinel.toml.example sentinel.toml
 $EDITOR sentinel.toml
 ```
 
-Set `server.url` and `server.token` to the values provided. Leaving the
-`<placeholders>` unchanged causes the sentinel container to crash-loop with a
-clear validation error at startup.
+### 4. Generate the signing identity
 
-`sentinel.toml` is gitignored — stays local to each operator. The sentinel
-image is pulled from `ghcr.io/aeddi/gno-watchtower/sentinel`; pin a specific
-tag or digest via `SENTINEL_IMAGE_TAG` in `validator.env` (default: `latest`).
+```sh
+make gen-identity
+```
+
+Creates the key `gnokms-docker-key` in `gnokms-data/keystore/`. Uses `GNOKMS_PASSWORD` from `validator.env` if set; otherwise prompts interactively.
+
+### 5. Provide `genesis.json`
+
+Copy your chain's genesis file to the repo root:
+
+```sh
+cp /path/to/genesis.json .
+```
 
 ### 6. Start
 
@@ -97,10 +62,54 @@ tag or digest via `SENTINEL_IMAGE_TAG` in `validator.env` (default: `latest`).
 make start
 ```
 
-On first start, images are built, secrets and config are created, and containers come
-up. On every subsequent start, gnoland's config is regenerated from scratch and
-`config.overrides` is re-applied — so edits to `config.overrides` take effect after a
-`make restart`.
+Builds the gnoland + gnokms images on first run (minutes), creates containers, starts the node.
+
+### 7. Verify
+
+```sh
+make infos               # identity, network config, build metadata, checksums
+make status watch=5      # live status table (height, peers, VP) refreshing every 5s
+```
+
+---
+
+## Configuration reference
+
+### validator.env reference
+
+| Variable              | Default                           | Meaning                                                                                                                                                                                                                                           |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GNOKMS_PASSWORD`     | _(unset)_                         | Decrypts the signing key. **In production, leave this unset** — see [Password security](#password-security). If set, `make start` / `make update` use it non-interactively; otherwise they prompt.                                                |
+| `GNO_VERSION`         | `master`                          | Branch, tag, or commit hash of `gnolang/gno` to build.                                                                                                                                                                                            |
+| `GNO_REPO`            | `gnolang/gno`                     | GitHub repo slug to clone gno sources from.                                                                                                                                                                                                       |
+| `SENTINEL_IMAGE_TAG`  | `latest`                          | Tag or digest for the sentinel image pulled from `ghcr.io/aeddi/gno-watchtower/sentinel`. Pin a digest (`sha256:...`) for reproducibility; drift is reported when a tag like `latest` advances on the registry.                                   |
+| `GNOLAND_RPC_LADDR`   | `0.0.0.0`                         | Host interface gnoland RPC binds to. Use `127.0.0.1` when exposing RPC only via a reverse proxy.                                                                                                                                                  |
+| `GNOLAND_RPC_PORT`    | `26657`                           | Host port mapped to gnoland RPC.                                                                                                                                                                                                                  |
+| `GNOLAND_P2P_LADDR`   | `0.0.0.0`                         | Host interface gnoland P2P binds to. Use `127.0.0.1` only if this node should not accept inbound peer connections.                                                                                                                                |
+| `GNOLAND_P2P_PORT`    | `26656`                           | Host port mapped to gnoland P2P.                                                                                                                                                                                                                  |
+| `GNOLAND_EXTRA_FLAGS` | `--skip-genesis-sig-verification` | Extra flags appended to `gnoland start`, word-split on whitespace. Add or remove as needed (e.g. `--skip-genesis-sig-verification --log-level info`).                                                                                             |
+| `GNOLAND_NTP_UPDATE`  | `1`                               | Any non-empty value enables in-container NTP sync at gnoland startup (tries `ntpd`, then `rdate`, then an HTTPS `Date` header; first success wins). Set empty to skip — e.g. when `chronyd` / `systemd-timesyncd` already manages the host clock. |
+| `GNOLAND_LOG_SIZE`    | `3`                               | Number of 1 GB gnoland log files to keep (3 × 1 GB = 3 GB total).                                                                                                                                                                                 |
+
+### config.overrides reference
+
+Per-node gnoland config. Each line is `key = value`; `#` comments and blank lines are ignored. Applied to `gnoland-data/config/config.toml` on every container start and every `make infos` run. System-hardcoded keys (remote signer socket, telemetry endpoint, p2p/rpc bind addresses) are re-applied after your overrides and always win — the commented block at the top of `config.overrides.example` lists them.
+
+Required fields:
+
+- `moniker` — human-readable node name.
+- `p2p.external_address` — public P2P address, e.g. `<your-ip>:26656`.
+- `p2p.persistent_peers` — comma-separated peers to keep persistent connections to.
+- `telemetry.service_instance_id` — node identifier tagged on OTLP traces (e.g. your moniker).
+- `telemetry.service_name` — service identifier tagged on OTLP traces (e.g. the chain ID).
+
+Optional — any other gnoland config key (e.g. `p2p.seeds`, `consensus.timeout_commit`, `mempool.size`). `config.overrides` is gitignored and stays local to each operator.
+
+### sentinel.toml reference
+
+Sentinel's format is defined upstream. See [gno-watchtower](https://github.com/aeddi/gno-watchtower) for every field. The only values you must set for this project are `server.url` and `server.token` (supplied by the watchtower operator). `sentinel.toml` is gitignored and stays local to each operator.
+
+---
 
 ## Operations
 
