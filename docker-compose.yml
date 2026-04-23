@@ -75,7 +75,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./sentinel.toml:/etc/sentinel/config.toml:ro
-    command: run /etc/sentinel/config.toml
+    command: run -log-format json /etc/sentinel/config.toml
     logging:
       driver: json-file
       options:

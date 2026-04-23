@@ -119,13 +119,11 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 ### Inspection
 
-| Command                     | What it does                                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails). |
-| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                             |
-| `make logs-gnoland`         | Pretty-print streaming gnoland JSON logs with [hl](https://github.com/pamburus/hl). `since=<duration>` controls history (default 1h). Auto-installed under `.tools/bin/` on first use.            |
-| `make logs-gnokms`          | Follow gnokms logs.                                                                                                                                                                               |
-| `make logs-sentinel`        | Follow sentinel logs.                                                                                                                                                                             |
+| Command                     | What it does                                                                                                                                                                                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails).                                                                                                                                       |
+| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                                                                                                                                                                   |
+| `make logs [since=<d>]`     | Merged TUI of gnoland + gnokms + sentinel logs via [gonzo](https://github.com/control-theory/gonzo). Per-service defaults: gnoland=1h, gnokms/sentinel=24h. `since=X` overrides all three. Inside the TUI: `Ctrl+F` severity, `/` search, `C` toggle columns, `Space` pause, `q` quit. Auto-installed under `.tools/bin/` on first use. |
 
 ### Cleanup
 
@@ -155,7 +153,7 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 `make build` writes `.build-state` (gitignored) recording the commit, version, repo, per-image content hashes, and the sentinel image digest resolved from ghcr. `make start` and `make update` read it back and report drift precisely (e.g., `gno commit advanced on chain/test12: 8513a68f → 9a2b4c1e`, or `sentinel image advanced on latest: 8513a68f → 9a2b4c1e`). The gnoland commit check hits `git ls-remote`, and the sentinel check hits `docker manifest inspect`; both gracefully skip on network failure.
 
-Downloaded tools (hl, jq) live under `.tools/bin/` (gitignored, auto-fetched on first use).
+Downloaded tools (gonzo, jq) live under `.tools/bin/` (gitignored, auto-fetched on first use). Gonzo's config lives at `.tools/gonzo.yml` (tracked).
 
 ## Architecture
 

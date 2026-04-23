@@ -1,0 +1,15 @@
+# gonzo config for `make logs`. Four deltas vs. gonzo defaults:
+#   - log-buffer bumped for the 3-container firehose (default 1000 is thin).
+#   - use-log-time=true so rows sort by gnoland/sentinel's own "ts" field
+#     instead of docker-receive time; timestamps are accurate and consistent.
+#   - disable-version-check so launching `make logs` doesn't hit GitHub.
+#   - stop-words suppress common JSON key names from the frequency dashboard
+#     (they're in every event and dominate the panel otherwise).
+log-buffer: 5000
+use-log-time: true
+disable-version-check: true
+stop-words:
+  - service.name
+  - ts
+  - level
+  - module

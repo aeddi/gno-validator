@@ -6,8 +6,8 @@
 # also be run directly with `bash .Makefile.sh <command>` from the repo root.
 #
 # Usage: .Makefile.sh <command>
-# Commands: gen-identity, infos, build, start, stop, restart, logs-gnoland,
-#           logs-gnokms, logs-sentinel, status, reset, update, clean-imgs
+# Commands: gen-identity, infos, build, start, stop, restart, logs,
+#           status, reset, update, clean-imgs
 
 set -euo pipefail
 
@@ -45,10 +45,12 @@ GNOLAND_CONTAINER="gno-validator-gnoland-1"
 GNOKMS_CONTAINER="gno-validator-gnokms-1"
 SENTINEL_CONTAINER="gno-validator-sentinel-1"
 
-HL_VERSION="0.36.1"
+GONZO_VERSION="0.3.2"
 JQ_VERSION="1.7.1"
-TOOLS_BIN_DIR=".tools/bin"
-HL_BIN="${TOOLS_BIN_DIR}/hl"
+TOOLS_DIR=".tools"
+TOOLS_BIN_DIR="${TOOLS_DIR}/bin"
+GONZO_BIN="${TOOLS_BIN_DIR}/gonzo"
+GONZO_CONFIG="${TOOLS_DIR}/gonzo.yml"
 JQ_BIN="${TOOLS_BIN_DIR}/jq"
 
 # Host UID/GID are consumed by docker-compose.yml for gnoland's user mapping
@@ -969,19 +971,19 @@ _download_url() {
   fi
 }
 
-install_hl() {
-  [[ -x "$HL_BIN" ]] && return 0
+install_gonzo() {
+  [[ -x "$GONZO_BIN" ]] && return 0
 
   local os arch archive
   os="$(uname -s)"
   arch="$(uname -m)"
   case "${os}/${arch}" in
-  Darwin/arm64) archive="hl-macos-arm64.tar.gz" ;;
-  Darwin/x86_64) archive="hl-macos-x86_64.tar.gz" ;;
-  Linux/aarch64 | Linux/arm64) archive="hl-linux-arm64-musl.tar.gz" ;;
-  Linux/x86_64) archive="hl-linux-x86_64-musl.tar.gz" ;;
+  Darwin/arm64) archive="gonzo-${GONZO_VERSION}-darwin-arm64.tar.gz" ;;
+  Darwin/x86_64) archive="gonzo-${GONZO_VERSION}-darwin-amd64.tar.gz" ;;
+  Linux/aarch64 | Linux/arm64) archive="gonzo-${GONZO_VERSION}-linux-arm64.tar.gz" ;;
+  Linux/x86_64) archive="gonzo-${GONZO_VERSION}-linux-amd64.tar.gz" ;;
   *)
-    echo "Error: unsupported platform ${os}/${arch} for hl" >&2
+    echo "Error: unsupported platform ${os}/${arch} for gonzo" >&2
     return 1
     ;;
   esac
@@ -990,17 +992,17 @@ install_hl() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   local rc=0
-  echo "Downloading hl v${HL_VERSION}..." >&2
+  echo "Downloading gonzo v${GONZO_VERSION}..." >&2
   if ! _download_url \
-    "https://github.com/pamburus/hl/releases/download/v${HL_VERSION}/${archive}" \
-    "${tmpdir}/hl.tar.gz"; then
+    "https://github.com/control-theory/gonzo/releases/download/v${GONZO_VERSION}/${archive}" \
+    "${tmpdir}/gonzo.tar.gz"; then
     rc=1
-  elif ! tar -xzf "${tmpdir}/hl.tar.gz" -C "$tmpdir" hl; then
+  elif ! tar -xzf "${tmpdir}/gonzo.tar.gz" -C "$tmpdir" gonzo; then
     rc=1
   else
-    mv "${tmpdir}/hl" "$HL_BIN"
-    chmod +x "$HL_BIN"
-    echo "hl installed at ${HL_BIN}" >&2
+    mv "${tmpdir}/gonzo" "$GONZO_BIN"
+    chmod +x "$GONZO_BIN"
+    echo "gonzo installed at ${GONZO_BIN}" >&2
   fi
   rm -rf "$tmpdir"
   return "$rc"
@@ -1218,7 +1220,7 @@ cmd_infos() {
       echo "validator pub_key: (keystore unreadable — check permissions on ${GNOKMS_DATA}/keystore)"
     fi
   fi
-  local node_reason="gnoland throwaway run failed — check 'make logs-gnoland'"
+  local node_reason="gnoland throwaway run failed — check 'make logs'"
   _infos_field "node_id" "$node_reason" gnoland_run gnoland secrets get node_id.id --raw
   _infos_field "moniker" "$node_reason" gnoland_run gnoland config get moniker --raw
   echo ""
@@ -1423,71 +1425,60 @@ cmd_restart() {
   cmd_start
 }
 
-cmd_logs_gnoland() {
+cmd_logs() {
   preflight docker
   classify_state
-  case "${STATE_GNOLAND:-absent}" in
-  absent)
-    echo "No gnoland container yet — run 'make start'."
+  if [[ "$STATE_OVERALL" == "none" ]]; then
+    echo "No containers — run 'make start'."
     return 0
-    ;;
-  stopped)
-    echo "Container stopped — showing logs from last run. Ctrl+C to exit."
-    ;;
-  esac
-  local since="${SINCE:-1h}"
-  if install_hl; then
-    # --paging=never: streaming logs shouldn't invoke a pager.
-    # --color=always: hl's TTY-detection only looks at stdin (we're piping
-    # in), so it wouldn't auto-enable color. Force it.
-    # --no-log-prefix on compose logs strips the "gnoland-1  | " prefix so
-    # hl sees raw JSON per line.
-    _compose_noenv logs --no-log-prefix --since "$since" -f gnoland 2>/dev/null |
-      "$HL_BIN" --paging=never --color=always
-  else
-    echo "hl unavailable, falling back to plain logs..."
-    _compose_noenv logs --since "$since" -f gnoland
   fi
-}
+  if [[ "$STATE_OVERALL" == "stopped" ]]; then
+    echo "All containers stopped — showing logs from last run. Ctrl+C to exit."
+  fi
 
-cmd_logs_gnokms() {
-  preflight docker
-  classify_state
-  case "${STATE_GNOKMS:-absent}" in
-  absent)
-    echo "No gnokms container yet — run 'make start'."
-    return 0
-    ;;
-  stopped)
-    echo "Container stopped — showing logs from last run. Ctrl+C to exit."
-    ;;
-  esac
-  local since="${SINCE:-}"
-  if [[ -n "$since" ]]; then
-    _compose_noenv logs --since "$since" -f gnokms
-  else
-    _compose_noenv logs -f gnokms
-  fi
-}
+  # Per-service defaults: gnoland is noisy (bound tight), the others are
+  # sparse (show a full day). A single `since=X` arg overrides all three.
+  local since_override="${SINCE:-}"
+  local since_gnoland="${since_override:-1h}"
+  local since_gnokms="${since_override:-24h}"
+  local since_sentinel="${since_override:-24h}"
 
-cmd_logs_sentinel() {
-  preflight docker
-  classify_state
-  case "${STATE_SENTINEL:-absent}" in
-  absent)
-    echo "No sentinel container yet — run 'make start'."
+  # gonzo is a TUI-only viewer with no stream mode; if it's not available
+  # (unsupported arch, offline download), fall back to plain compose logs.
+  if ! install_gonzo; then
+    echo "gonzo unavailable, falling back to plain 'docker compose logs -f' across all services..."
+    _compose_noenv logs --since "$since_gnoland" -f
     return 0
-    ;;
-  stopped)
-    echo "Container stopped — showing logs from last run. Ctrl+C to exit."
-    ;;
-  esac
-  local since="${SINCE:-}"
-  if [[ -n "$since" ]]; then
-    _compose_noenv logs --since "$since" -f sentinel
-  else
-    _compose_noenv logs -f sentinel
   fi
+
+  # We need jq to inject `service.name` into each line so gonzo can track
+  # origin. Our own `ensure_jq` handles prebuilt/system/install fallbacks.
+  local jq_bin
+  if ! jq_bin="$(ensure_jq)"; then
+    echo "Error: jq is required to tag log sources for gonzo." >&2
+    echo "       Install jq (or let .tools/bin/ auto-download succeed) and retry." >&2
+    return 1
+  fi
+
+  # jq program that runs once per input line (-R, raw string input):
+  #   - parse the line as JSON; on success, merge in service.name
+  #   - on failure (plain text, logfmt, entrypoint banners), wrap as
+  #     { service.name, msg } so gonzo sees one JSON event per line.
+  local tag_program='. as $raw | try (fromjson + {"service.name": $s}) catch {"service.name": $s, "msg": $raw}'
+
+  # Run three feeds in parallel backgrounded, merge onto a single stdin,
+  # pipe into gonzo. `wait` keeps the subshell alive until all three feeds
+  # exit (which happens when the user Ctrl+Cs out of gonzo and SIGPIPE
+  # cascades back up the pipeline).
+  {
+    _compose_noenv logs --no-log-prefix -f --since "$since_gnoland" gnoland 2>/dev/null |
+      "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" &
+    _compose_noenv logs --no-log-prefix -f --since "$since_gnokms" gnokms 2>/dev/null |
+      "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" &
+    _compose_noenv logs --no-log-prefix -f --since "$since_sentinel" sentinel 2>/dev/null |
+      "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" &
+    wait
+  } | "$GONZO_BIN" --config "$GONZO_CONFIG"
 }
 
 cmd_status() {
@@ -1553,7 +1544,7 @@ _status_render() {
   # but RPC not yet up" cases the RPC probe alone can't distinguish.
   case "${STATE_GNOLAND:-absent}" in
   restarting)
-    printf "%-16s %-12s %-8s %-24s %-7s %s${eol}\n" "-" "restarting" "-" "-" "-" "(make logs-gnoland)"
+    printf "%-16s %-12s %-8s %-24s %-7s %s${eol}\n" "-" "restarting" "-" "-" "-" "(make logs)"
     return 0
     ;;
   absent | stopped)
@@ -1575,7 +1566,7 @@ _status_render() {
     if ((started > 0 && age < 60)); then
       printf "%-16s %-12s %-8s %-24s %-7s %s${eol}\n" "-" "starting" "-" "-" "-" "(${age}s ago)"
     else
-      printf "%-16s %-12s %-8s %-24s %-7s %s${eol}\n" "-" "unreachable" "-" "-" "-" "(make logs-gnoland)"
+      printf "%-16s %-12s %-8s %-24s %-7s %s${eol}\n" "-" "unreachable" "-" "-" "-" "(make logs)"
     fi
     return 0
   fi
@@ -1954,9 +1945,7 @@ build) cmd_build ;;
 start) cmd_start ;;
 stop) cmd_stop ;;
 restart) cmd_restart ;;
-logs-gnoland) cmd_logs_gnoland ;;
-logs-gnokms) cmd_logs_gnokms ;;
-logs-sentinel) cmd_logs_sentinel ;;
+logs) cmd_logs ;;
 status) cmd_status ;;
 reset) cmd_reset ;;
 clean-imgs) cmd_clean_imgs ;;

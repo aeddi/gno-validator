@@ -15,9 +15,8 @@
 # Inspection:
 #   status         [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                          Print node identity, network config, build metadata, checksums
-#   logs-gnoland   [since=<d>]     Pretty-print streaming gnoland JSON logs — downloads hl on first run (default: 1h)
-#   logs-gnokms    [since=<d>]     Follow gnokms logs (since= optional)
-#   logs-sentinel  [since=<d>]     Follow sentinel logs (since= optional)
+#   logs           [since=<d>]     Open merged TUI of gnoland + gnokms + sentinel logs — downloads gonzo on first run.
+#                                  Per-service defaults: gnoland=1h, gnokms/sentinel=24h. since=<d> overrides all three.
 #
 # Cleanup:
 #   clean-imgs     [all=1] [yes=1] Remove stale images (default). all=1 also removes current images and sentinel.
@@ -40,7 +39,7 @@ export HOST_GID := $(shell id -g)
 
 # Arg → env pass-through: `make build force=1` → FORCE=1, `make status watch=5` → WATCH=5,
 # `make clean-imgs yes=1` → YES=1, `make clean-imgs all=1` → ALL=1,
-# `make logs-gnoland since=30m` → SINCE=30m.
+# `make logs since=30m` → SINCE=30m.
 export FORCE := $(force)
 export WATCH := $(watch)
 export YES   := $(yes)
@@ -51,7 +50,7 @@ PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
 .PHONY: help gen-identity infos build start stop restart update reset \
-        logs-gnoland logs-gnokms logs-sentinel status clean-imgs
+        logs status clean-imgs
 
 help:
 	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
@@ -77,14 +76,8 @@ update:
 reset:
 	@$(SCRIPT) reset
 
-logs-gnoland:
-	@$(SCRIPT) logs-gnoland
-
-logs-gnokms:
-	@$(SCRIPT) logs-gnokms
-
-logs-sentinel:
-	@$(SCRIPT) logs-sentinel
+logs:
+	@$(SCRIPT) logs
 
 status:
 	@$(SCRIPT) status

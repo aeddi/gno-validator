@@ -14,7 +14,7 @@ genesis.json
 gnoland-data/
 gnokms-data/
 
-# Downloaded tool binaries (lnav, jq) — fetched on demand, not tracked
+# Downloaded tool binaries (gonzo, jq) — fetched on demand, not tracked
 .tools/bin/
 
 # reverse-proxy — local config and generated files
