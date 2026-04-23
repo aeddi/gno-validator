@@ -14,7 +14,6 @@
 # ---- Required node settings
 moniker = "anon-val-01"
 p2p.external_address = "<public-ip-or-domain>:26656"
-p2p.seeds = "<node-id>@<host>:26656,..."
 p2p.persistent_peers = "<node-id>@<host>:26656,..."
 telemetry.service_instance_id = "anon-val-01" # Node ID in Grafana
 telemetry.service_name = "<chain-id-or-similar>" # Service ID in Grafana
