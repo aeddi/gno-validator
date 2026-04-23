@@ -210,8 +210,9 @@ check_gnokms_not_running() {
 # canonical error and returns 1. The `docker_warn` pseudo-check is a soft
 # variant (used by `reset`) that warns but doesn't abort.
 # NOTE: `err_foo` writes to stderr and returns 1 — but we must chain with an
-# explicit `return 1` (not `return "$(err_foo)"`, which would capture stdout
-# and call `return ""`, causing a numeric-argument error and a double ERR trap).
+# explicit `return 1`, not `return "$(err_foo)"`: that would capture stdout
+# (empty, since err_foo prints to stderr) and call `return ""`, which fails
+# with a numeric-argument error.
 preflight() {
   local check
   for check in "$@"; do
@@ -446,7 +447,16 @@ sentinel_remote_digest() {
   ref="$(sentinel_image_ref)"
   local out
   out="$(docker manifest inspect "$ref" 2>/dev/null || true)"
-  [[ -z "$out" ]] && return 0
+  if [[ -z "$out" ]]; then
+    # Warn once per process so watch-mode / repeated calls don't spam. Without
+    # this note, the operator running offline would silently miss sentinel
+    # drift ("image advanced on latest") and not know why.
+    if [[ -z "${_SENTINEL_REMOTE_WARNED:-}" ]]; then
+      echo "Note: can't reach ghcr for sentinel manifest (${ref}); sentinel drift check skipped this run." >&2
+      _SENTINEL_REMOTE_WARNED=1
+    fi
+    return 0
+  fi
   local digest=""
   local jq_bin
   if jq_bin="$(ensure_jq 2>/dev/null)" && [[ -n "$jq_bin" ]]; then
