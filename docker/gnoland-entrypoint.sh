@@ -66,12 +66,17 @@ fi
 if [ "${1-}" = "gnoland" ] && [ "${2-}" = "start" ]; then
   do_init
 
-  # ---- Sync clock and handle early start flag
+  # ---- Sync clock
   if [ -n "${GNOLAND_NTP_UPDATE:-}" ]; then
     ntpd -nq -p pool.ntp.org || printf "Warning: NTP sync failed, continuing with current clock\n" >&2
   fi
-  if [ -n "${GNOLAND_EARLY_START:-}" ]; then
-    set -- "$@" -x-early-start
+
+  # ---- Append operator-provided extra flags (word-split on whitespace).
+  # Operator sets GNOLAND_EXTRA_FLAGS in validator.env; the default in
+  # validator.env.example includes --skip-genesis-sig-verification.
+  # shellcheck disable=SC2086 # intentional word-splitting
+  if [ -n "${GNOLAND_EXTRA_FLAGS:-}" ]; then
+    set -- "$@" $GNOLAND_EXTRA_FLAGS
   fi
 fi
 

@@ -42,12 +42,11 @@ services:
       - gno-validator.validator-env.sha256=${VALIDATOR_ENV_SHA256:-}
       - gno-validator.compose-file.sha256=${COMPOSE_FILE_SHA256:-}
     environment:
-      GNOLAND_EARLY_START: ${GNOLAND_EARLY_START:-}
+      GNOLAND_EXTRA_FLAGS: ${GNOLAND_EXTRA_FLAGS:-}
       GNOLAND_NTP_UPDATE: ${GNOLAND_NTP_UPDATE:-1}
     command:
       - gnoland
       - start
-      - --skip-genesis-sig-verification
       - -log-format
       - json
     volumes:
