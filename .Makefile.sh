@@ -1067,6 +1067,17 @@ _fresh_up() {
   # Caller has already verified validator.env presence / fallback behaviour.
   ensure_password
   resolve_input_hashes
+  # Docker bind-mounts a non-existent host path as a directory by default,
+  # which would poison subsequent sha256_of_file calls (they'd see a dir, not
+  # a file). Ensure config.overrides is a file before `up -d` creates the
+  # mount — operators with no overrides get an empty file, harmless.
+  if [[ -d "$OVERRIDES_FILE" ]]; then
+    rmdir "$OVERRIDES_FILE" 2>/dev/null || {
+      echo "Error: ${OVERRIDES_FILE} exists as a non-empty directory. Remove it manually and retry." >&2
+      return 1
+    }
+  fi
+  [[ -e "$OVERRIDES_FILE" ]] || touch "$OVERRIDES_FILE"
   _compose up -d
 
   cat <<EOF
@@ -1124,17 +1135,26 @@ cmd_gen_identity() {
   echo "Next: edit validator.env (moniker, peers, etc.) and run 'make start'."
 }
 
-# Print one data field, or a degraded `(unavailable — <reason>)` on failure.
+# Print one data field. Distinguishes three outcomes so operators can tell
+# "empty but normal" from "something is broken":
+#   - command succeeds with non-empty output → print value.
+#   - command succeeds with empty output     → "(not set)".
+#   - command fails (non-zero exit)          → "(unavailable — <reason>)".
 # Keeps cmd_infos printing the rest of the node info even if a single call
-# (e.g. gnoland config get) misbehaves. The reason string should tell the
-# operator what's wrong and what to do about it.
+# misbehaves. The reason string should tell the operator what's wrong and
+# what to do about it.
 # Args: <label> <reason-if-fails> <command...>
 _infos_field() {
   local label="$1" reason="$2"
   shift 2
-  local value
-  if value="$("$@" 2>/dev/null)" && [[ -n "$value" ]]; then
-    printf '%-18s %s\n' "${label}:" "$value"
+  local value rc=0
+  value="$("$@" 2>/dev/null)" || rc=$?
+  if ((rc == 0)); then
+    if [[ -n "$value" ]]; then
+      printf '%-18s %s\n' "${label}:" "$value"
+    else
+      printf '%-18s (not set)\n' "${label}:"
+    fi
   else
     printf '%-18s (unavailable — %s)\n' "${label}:" "$reason"
   fi
@@ -1146,9 +1166,14 @@ _infos_field() {
 _infos_field_trunc() {
   local label="$1" reason="$2" maxlen="$3"
   shift 3
-  local value
-  if value="$("$@" 2>/dev/null)" && [[ -n "$value" ]]; then
-    printf '%-18s %s\n' "${label}:" "${value:0:$maxlen}"
+  local value rc=0
+  value="$("$@" 2>/dev/null)" || rc=$?
+  if ((rc == 0)); then
+    if [[ -n "$value" ]]; then
+      printf '%-18s %s\n' "${label}:" "${value:0:$maxlen}"
+    else
+      printf '%-18s (not set)\n' "${label}:"
+    fi
   else
     printf '%-18s (unavailable — %s)\n' "${label}:" "$reason"
   fi
@@ -1599,6 +1624,7 @@ _http_get() {
 
 cmd_reset() {
   preflight docker_warn
+  local skip_prompt="${YES:-0}"
 
   # Nothing-to-reset guards (cheap, before any prompt).
   if [[ ! -d "$GNOLAND_DATA" ]] || ! dir_has_entries "$GNOLAND_DATA"; then
@@ -1629,16 +1655,23 @@ cmd_reset() {
   echo "  Will reset : ${pv_state}"
   echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config"
 
-  if ! confirm "Continue?" n yes=1; then
-    echo "Aborted."
-    return 1
+  # yes=1 skips every interactive prompt in this flow (Continue, Stop-first,
+  # Start-again). Defaults when skipped: proceed, stop-then-reset, start-again.
+  if ((skip_prompt != 1)); then
+    if ! confirm "Continue?" n yes=1; then
+      echo "Aborted."
+      return 1
+    fi
+
+    if ((was_running == 1)); then
+      if ! confirm "Containers are running. Stop them first?" y yes=1; then
+        echo "Aborted — will not reset while containers are running."
+        return 1
+      fi
+    fi
   fi
 
   if ((was_running == 1)); then
-    if ! confirm "Containers are running. Stop them first?" y yes=1; then
-      echo "Aborted — will not reset while containers are running."
-      return 1
-    fi
     cmd_stop
   fi
 
@@ -1652,7 +1685,7 @@ cmd_reset() {
   echo "Reset complete."
 
   if ((was_running == 1)); then
-    if confirm "Start containers again?" y yes=1; then
+    if ((skip_prompt == 1)) || confirm "Start containers again?" y yes=1; then
       cmd_start
     else
       echo "Run 'make start' when ready."
