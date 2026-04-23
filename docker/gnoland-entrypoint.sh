@@ -56,6 +56,48 @@ do_init() {
   fi
 }
 
+# ---- System time sync
+# Try multiple methods in order, stopping at the first success. Each attempt
+# prints one status line so operators can see what worked.
+#   1. busybox ntpd  — UDP/123, most common.
+#   2. busybox rdate — TCP/37 (RFC 868), often firewalled; try anyway.
+#   3. HTTP Date     — pull the Date header from an HTTPS endpoint and feed
+#                       it to busybox `date -D`; works wherever HTTPS is open.
+# Each method is bounded with `timeout` so a hung server doesn't stall startup.
+_sync_time_ntpd() {
+  timeout 10 ntpd -nq -p pool.ntp.org >/dev/null 2>&1
+}
+
+_sync_time_rdate() {
+  timeout 10 rdate time.nist.gov >/dev/null 2>&1
+}
+
+_sync_time_http() {
+  http_date=$(wget -qS --spider --timeout=5 https://www.google.com 2>&1 |
+    awk '/^[[:space:]]*Date:/{sub(/^[[:space:]]*Date: */, ""); print; exit}')
+  [ -n "$http_date" ] || return 1
+  date -u -D '%a, %d %b %Y %H:%M:%S GMT' -s "$http_date" >/dev/null 2>&1
+}
+
+sync_time() {
+  printf 'Syncing system time:\n'
+  _synced=0
+  for name in ntpd rdate http; do
+    if [ "$_synced" = 1 ]; then
+      printf '  %-8s skipped\n' "${name}:"
+      continue
+    fi
+    if "_sync_time_$name"; then
+      printf '  %-8s succeeded\n' "${name}:"
+      _synced=1
+    else
+      printf '  %-8s failed\n' "${name}:"
+    fi
+  done
+  [ "$_synced" = 1 ] ||
+    printf 'Warning: all time-sync methods failed; continuing with current clock\n' >&2
+}
+
 # ---- Init-only mode (no gnoland start)
 if [ "${GNOLAND_INIT_ONLY:-}" = "1" ]; then
   do_init
@@ -66,9 +108,8 @@ fi
 if [ "${1-}" = "gnoland" ] && [ "${2-}" = "start" ]; then
   do_init
 
-  # ---- Sync clock
   if [ -n "${GNOLAND_NTP_UPDATE:-}" ]; then
-    ntpd -nq -p pool.ntp.org || printf "Warning: NTP sync failed, continuing with current clock\n" >&2
+    sync_time
   fi
 
   # ---- Append operator-provided extra flags (word-split on whitespace).
