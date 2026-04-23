@@ -19,6 +19,7 @@ telemetry.service_instance_id = "anon-val-01" # Node ID in Grafana
 telemetry.service_name = "<chain-id-or-similar>" # Service ID in Grafana
 
 # ---- Recommended settings for a validator node
+application.prune_strategy = "syncable"
 consensus.peer_gossip_sleep_duration = "10ms"
 consensus.timeout_commit = "3s"
 mempool.size = 10000

@@ -93,9 +93,9 @@ make status watch=5      # live status table (height, peers, VP) refreshing ever
 
 ### config.overrides reference
 
-Per-node gnoland config. Each line is `key = value`; `#` comments and blank lines are ignored. Applied to `gnoland-data/config/config.toml` on every container start and every `make infos` run. System-hardcoded keys (remote signer socket, telemetry endpoint, p2p/rpc bind addresses) are re-applied after your overrides and always win — the commented block at the top of `config.overrides.example` lists them.
+Per-node gnoland config. Each line is `key = value`; `#` comments and blank lines are ignored. Applied to `gnoland-data/config/config.toml` on every container start and every `make infos` run. `config.overrides` is gitignored and stays local to each operator.
 
-Required fields:
+**Required fields:**
 
 - `moniker` — human-readable node name.
 - `p2p.external_address` — public P2P address, e.g. `<your-ip>:26656`.
@@ -103,7 +103,27 @@ Required fields:
 - `telemetry.service_instance_id` — node identifier tagged on OTLP traces (e.g. your moniker).
 - `telemetry.service_name` — service identifier tagged on OTLP traces (e.g. the chain ID).
 
-Optional — any other gnoland config key (e.g. `p2p.seeds`, `consensus.timeout_commit`, `mempool.size`). `config.overrides` is gitignored and stays local to each operator.
+**Recommended fields** (included in `config.overrides.example`):
+
+- `application.prune_strategy = "syncable"`
+- `consensus.peer_gossip_sleep_duration = "10ms"`
+- `consensus.timeout_commit = "3s"`
+- `mempool.size = 10000`
+- `p2p.flush_throttle_timeout = "10ms"`
+- `p2p.max_num_outbound_peers = 40`
+
+**Hardcoded overrides** — the entrypoint re-applies these after your `config.overrides` on every container start, so they always win:
+
+| Key                                                     | Value                      | Why                                                                                                       |
+| ------------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `p2p.laddr`                                             | `tcp://0.0.0.0:26656`      | In-container P2P bind (host interface/port via `GNOLAND_P2P_LADDR`/`GNOLAND_P2P_PORT` in `validator.env`) |
+| `rpc.laddr`                                             | `tcp://0.0.0.0:26657`      | In-container RPC bind (host interface/port via `GNOLAND_RPC_LADDR`/`GNOLAND_RPC_PORT` in `validator.env`) |
+| `consensus.priv_validator.remote_signer.server_address` | `unix:///sock/gnokms.sock` | Path to the gnokms socket shared via Docker volume                                                        |
+| `telemetry.metrics_enabled`                             | `true`                     | Sentinel collects OTLP metrics                                                                            |
+| `telemetry.traces_enabled`                              | `true`                     | Sentinel collects OTLP traces                                                                             |
+| `telemetry.exporter_endpoint`                           | `http://sentinel:4318`     | In-compose DNS name for the sentinel sidecar                                                              |
+
+Any other gnoland config key is fair game — add what you need (e.g. `p2p.seeds`).
 
 ### sentinel.toml reference
 
