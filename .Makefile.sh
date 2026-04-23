@@ -9,14 +9,15 @@
 # Commands: gen-identity, infos, build, start, stop, restart, logs-gnoland,
 #           logs-gnokms, logs-sentinel, status, reset, update, clean-imgs
 
-set -Eeuo pipefail
+set -euo pipefail
 
-# The ERR trap prints a raw diagnostic (line + failing command) for unexpected
-# failures. When our own error handlers (err_*) emit a clean message, they set
-# HANDLED_ERROR=1 so the trap stays quiet — otherwise the operator sees the
-# friendly error followed by a confusing internal trace.
-HANDLED_ERROR=0
-trap '(( HANDLED_ERROR )) || echo "Error: command failed (line ${LINENO}): ${BASH_COMMAND}" >&2' ERR
+# No ERR trap. We tried one to surface unexpected failures with a line + command
+# trace, but set -E propagates the trap into command-substitution subshells
+# where helpers legitimately use `return 1` to signal data (e.g.
+# `build_state_drift_summary` returning 1 to mean "drift detected"). That
+# triggered false-positive traps impossible to guard against without rewriting
+# the signal-via-exit-code patterns. Rely on err_* for user-facing errors and
+# bash's native error messages (plus set -e) for everything else.
 
 # ---- Globals
 
@@ -56,43 +57,37 @@ export HOST_UID="${HOST_UID:-$(id -u)}"
 export HOST_GID="${HOST_GID:-$(id -g)}"
 
 # ---- Error printers
-# Canonical, user-facing error messages. Each sets HANDLED_ERROR=1 so the ERR
-# trap stays quiet (the operator should see the friendly message, not the
-# internal trace), and returns 1 so callers can chain with `||` and propagate.
+# Canonical, user-facing error messages. Each writes to stderr and returns 1
+# so callers can chain with `||` and propagate. Centralizing these means every
+# target reports the same diagnosis for the same situation.
 
 err_docker() {
-  HANDLED_ERROR=1
   echo "Error: Docker is required but unavailable. Start Docker (or install it) and retry." >&2
   return 1
 }
 
 err_genesis_missing() {
-  HANDLED_ERROR=1
   echo "Error: genesis.json not found. Place the chain genesis at ./${GENESIS_FILE} before continuing." >&2
   return 1
 }
 
 err_keystore_missing() {
-  HANDLED_ERROR=1
   echo "Error: validator keystore is empty. Run 'make gen-identity' to create the signing key." >&2
   return 1
 }
 
 err_gnokms_running() {
-  HANDLED_ERROR=1
   echo "Error: gnokms is running and holds the keystore lock. Run 'make stop' first." >&2
   return 1
 }
 
 err_password_mismatch() {
-  HANDLED_ERROR=1
   echo "Error: GNOKMS_PASSWORD is not correct for the keystore." >&2
   echo "       Re-run with the correct password, or update validator.env." >&2
   return 1
 }
 
 err_containers_in_use() {
-  HANDLED_ERROR=1
   echo "Error: containers exist using these images: $*" >&2
   echo "       Run 'make stop' then 'docker compose down' first (or 'make update force=1' to recreate), then retry." >&2
   return 1
@@ -100,20 +95,17 @@ err_containers_in_use() {
 
 err_non_tty() {
   local flag="$1"
-  HANDLED_ERROR=1
   echo "Error: non-interactive session; pass ${flag} to proceed." >&2
   return 1
 }
 
 err_build_failed() {
-  HANDLED_ERROR=1
   echo "Error: image build failed. See output above." >&2
   echo "       Likely causes: network offline, GNO_VERSION doesn't exist on GNO_REPO, or a Dockerfile / entrypoint error." >&2
   return 1
 }
 
 err_no_containers_for_restart() {
-  HANDLED_ERROR=1
   echo "Error: no containers to restart. Run 'make start' first." >&2
   return 1
 }
@@ -170,7 +162,6 @@ prompt_password_if_unset() {
     return 0
   fi
   if [[ ! -t 0 ]]; then
-    HANDLED_ERROR=1
     echo "Error: ${var} not set and no TTY for prompt. Set it in validator.env or the environment." >&2
     return 1
   fi
@@ -258,7 +249,6 @@ preflight() {
       }
       ;;
     *)
-      HANDLED_ERROR=1
       echo "preflight: unknown check '$check'" >&2
       return 2
       ;;
@@ -870,7 +860,6 @@ ensure_images() {
     return 0
     ;;
   *)
-    HANDLED_ERROR=1
     echo "ensure_images: unknown mode '$mode'" >&2
     return 2
     ;;
@@ -1340,7 +1329,6 @@ cmd_start() {
     _compose start
     ;;
   *)
-    HANDLED_ERROR=1
     echo "Error: unexpected container state '${STATE_OVERALL}'." >&2
     return 1
     ;;
@@ -1500,7 +1488,6 @@ cmd_status() {
   fi
 
   if ! [[ "$watch_interval" =~ ^[0-9]+(\.[0-9]+)?$ ]] || [[ "$watch_interval" == "0" ]]; then
-    HANDLED_ERROR=1
     echo "Error: watch= must be a positive number (got '${watch_interval}')." >&2
     return 2
   fi
@@ -1633,14 +1620,12 @@ cmd_reset() {
   echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config"
 
   if ! confirm "Continue?" n yes=1; then
-    HANDLED_ERROR=1
     echo "Aborted."
     return 1
   fi
 
   if ((was_running == 1)); then
     if ! confirm "Containers are running. Stop them first?" y yes=1; then
-      HANDLED_ERROR=1
       echo "Aborted — will not reset while containers are running."
       return 1
     fi
@@ -1650,7 +1635,6 @@ cmd_reset() {
   echo "Resetting..."
   rm -rf "${GNOLAND_DATA}/db" "${GNOLAND_DATA}/wal"
   if ! printf '{\n  "height": "0",\n  "round": "0",\n  "step": 0\n}\n' >"$pv_state"; then
-    HANDLED_ERROR=1
     echo "WARNING: db/wal deleted but ${pv_state} failed to reset." >&2
     echo "         The node will refuse to start until this file contains height=0. Manual fix needed." >&2
     return 1
@@ -1727,7 +1711,6 @@ cmd_clean_imgs() {
   else
     # Stale-only mode — requires .build-state to classify.
     if [[ ! -f "$STATE_FILE" ]]; then
-      HANDLED_ERROR=1
       echo "Error: cannot identify stale images without ${STATE_FILE}." >&2
       echo "       Pass all=1 to remove everything, or run 'make build' first." >&2
       return 1
@@ -1778,7 +1761,6 @@ cmd_clean_imgs() {
 
   if ((skip_prompt != 1)); then
     if ! confirm "Continue?" n yes=1; then
-      HANDLED_ERROR=1
       echo "Aborted."
       return 1
     fi
@@ -1797,7 +1779,6 @@ cmd_clean_imgs() {
   done
   echo ""
   if ((failed > 0)); then
-    HANDLED_ERROR=1
     echo "Removed ${ok} image(s); ${failed} failed."
     return 1
   fi
@@ -1886,7 +1867,6 @@ cmd_update() {
 
   if ((force == 0)); then
     if ! confirm "Continue?" y force=1; then
-      HANDLED_ERROR=1
       echo "Aborted."
       return 1
     fi
