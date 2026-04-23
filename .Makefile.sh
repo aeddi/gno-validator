@@ -1131,6 +1131,20 @@ _infos_field() {
   fi
 }
 
+# Like _infos_field but truncates the value to <maxlen> characters (useful for
+# long fingerprints where a 12-char prefix is enough to compare visually).
+# Args: <label> <reason-if-fails> <maxlen> <command...>
+_infos_field_trunc() {
+  local label="$1" reason="$2" maxlen="$3"
+  shift 3
+  local value
+  if value="$("$@" 2>/dev/null)" && [[ -n "$value" ]]; then
+    printf '%-18s %s\n' "${label}:" "${value:0:$maxlen}"
+  else
+    printf '%-18s (unavailable — %s)\n' "${label}:" "$reason"
+  fi
+}
+
 cmd_infos() {
   preflight docker env_note
   ensure_images warn-if-stale
@@ -1181,7 +1195,6 @@ cmd_infos() {
 
   resolve_ports
   echo "=== Network Configuration ==="
-  _infos_field "seeds" "$node_reason" gnoland_run gnoland config get p2p.seeds --raw
   _infos_field "persistent peers" "$node_reason" gnoland_run gnoland config get p2p.persistent_peers --raw
   printf '%-18s tcp://%s:%s\n' "p2p listener:" "${GNOLAND_P2P_LADDR}" "${GNOLAND_P2P_PORT}"
   printf '%-18s tcp://%s:%s\n' "rpc listener:" "${GNOLAND_RPC_LADDR}" "${GNOLAND_RPC_PORT}"
@@ -1193,6 +1206,11 @@ cmd_infos() {
   _infos_field "gno version" "$label_reason" image_label "$GNOLAND_IMAGE" gno.version
   _infos_field "gno repo" "$label_reason" image_label "$GNOLAND_IMAGE" gno.repo
   _infos_field "build date" "$label_reason" image_label "$GNOLAND_IMAGE" build.date
+  _infos_field_trunc "dockerfile hash" "$label_reason" 12 image_label "$GNOLAND_IMAGE" build.dockerfile_hash
+  _infos_field_trunc "entrypoint hash" "$label_reason" 12 image_label "$GNOLAND_IMAGE" build.entrypoint_hash
+  local sentinel_reason="sentinel image not pulled — run 'make start' or 'make update'"
+  _infos_field "sentinel image" "$sentinel_reason" sentinel_image_ref
+  _infos_field_trunc "sentinel digest" "$sentinel_reason" 19 sentinel_local_digest
   echo ""
 
   echo "=== File Checksums (SHA-256) ==="
