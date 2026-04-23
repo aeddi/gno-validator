@@ -4,8 +4,8 @@
 # Format: key = value (one per line; # for comments; blank lines ignored)
 
 # ---- System-hardcoded keys (overridden by the entrypoint, cannot be customized)
-# p2p.laddr                                              = "tcp://0.0.0.0:26656"   # in-container P2P bind
-# rpc.laddr                                              = "tcp://0.0.0.0:26657"   # in-container RPC bind
+# p2p.laddr                                              = "tcp://0.0.0.0:26656"        # in-container P2P bind
+# rpc.laddr                                              = "tcp://0.0.0.0:26657"        # in-container RPC bind
 # consensus.priv_validator.remote_signer.server_address  = "unix:///sock/gnokms.sock"   # gnokms socket
 # telemetry.metrics_enabled                              = true
 # telemetry.traces_enabled                               = true
