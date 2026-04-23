@@ -1468,42 +1468,58 @@ cmd_logs() {
 
   # Architecture: gonzo runs in the FOREGROUND reading from a FIFO; three
   # feeder pipelines write to that FIFO in the background. When gonzo exits
-  # (user presses q), our EXIT trap kills the feeders — otherwise idle
-  # feeders (gnokms / sentinel with no recent logs) never get SIGPIPE from
-  # the closed downstream pipe and the script hangs waiting on `wait`,
-  # forcing the operator to Ctrl+C after quitting.
-  local fifo
-  fifo="$(mktemp -u "${TMPDIR:-/tmp}/gno-val-logs.XXXXXX")"
-  if ! mkfifo "$fifo" 2>/dev/null; then
-    echo "Error: failed to create fifo at ${fifo}" >&2
+  # (user presses q), we kill the feeders — otherwise idle feeders
+  # (gnokms / sentinel with no recent logs) never get SIGPIPE and the
+  # script hangs, forcing the operator to Ctrl+C after quitting.
+  #
+  # State is kept in shell-global vars (_LOGS_*) rather than `local` because
+  # the EXIT trap runs after cmd_logs returns, by which point locals are
+  # out of scope.
+  _LOGS_FIFO=""
+  _LOGS_FEED_PIDS=""
+  trap _cmd_logs_cleanup EXIT INT TERM
+
+  _LOGS_FIFO="$(mktemp -u "${TMPDIR:-/tmp}/gno-val-logs.XXXXXX")"
+  if ! mkfifo "$_LOGS_FIFO" 2>/dev/null; then
+    echo "Error: failed to create fifo at ${_LOGS_FIFO}" >&2
     return 1
   fi
-
-  local -a _feed_pids=()
-  _cmd_logs_cleanup() {
-    if ((${#_feed_pids[@]} > 0)); then
-      kill -TERM "${_feed_pids[@]}" 2>/dev/null || true
-    fi
-    wait 2>/dev/null || true
-    rm -f "$fifo"
-  }
-  trap _cmd_logs_cleanup EXIT INT TERM
 
   # Each feeder blocks on FIFO-open-for-write until gonzo opens it for
   # reading; backgrounding them here lets us run gonzo last and everything
   # unblocks simultaneously.
   (_compose_noenv logs --no-log-prefix -f --since "$since_gnoland" gnoland 2>/dev/null |
-    "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" >"$fifo") &
-  _feed_pids+=($!)
+    "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" >"$_LOGS_FIFO") &
+  _LOGS_FEED_PIDS="$! $_LOGS_FEED_PIDS"
   (_compose_noenv logs --no-log-prefix -f --since "$since_gnokms" gnokms 2>/dev/null |
-    "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" >"$fifo") &
-  _feed_pids+=($!)
+    "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" >"$_LOGS_FIFO") &
+  _LOGS_FEED_PIDS="$! $_LOGS_FEED_PIDS"
   (_compose_noenv logs --no-log-prefix -f --since "$since_sentinel" sentinel 2>/dev/null |
-    "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" >"$fifo") &
-  _feed_pids+=($!)
+    "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" >"$_LOGS_FIFO") &
+  _LOGS_FEED_PIDS="$! $_LOGS_FEED_PIDS"
 
-  "$GONZO_BIN" --config "$GONZO_CONFIG" <"$fifo"
-  # Trap fires on return and cleans up feeders + fifo.
+  # Filter gonzo's "Using config file:" info-log from stderr while keeping
+  # real errors. TUI output goes to /dev/tty, so this doesn't affect the UI.
+  "$GONZO_BIN" --config "$GONZO_CONFIG" <"$_LOGS_FIFO" \
+    2> >(grep -v 'Using config file:' >&2)
+
+  # Clean up explicitly (idempotent with the EXIT trap) and clear the trap
+  # so it doesn't re-fire during normal return.
+  _cmd_logs_cleanup
+  trap - EXIT INT TERM
+}
+
+# Kill feeder processes and remove the merge FIFO. Idempotent: callable
+# explicitly after gonzo exits and again as an EXIT trap on abnormal exit.
+_cmd_logs_cleanup() {
+  if [[ -n "${_LOGS_FEED_PIDS:-}" ]]; then
+    # shellcheck disable=SC2086 # intentional word-splitting of PID list
+    kill -TERM $_LOGS_FEED_PIDS 2>/dev/null || true
+  fi
+  wait 2>/dev/null || true
+  [[ -n "${_LOGS_FIFO:-}" && -p "$_LOGS_FIFO" ]] && rm -f "$_LOGS_FIFO"
+  _LOGS_FEED_PIDS=""
+  _LOGS_FIFO=""
 }
 
 cmd_status() {
@@ -1860,21 +1876,27 @@ cmd_update() {
   local need_rebuild=0 need_recreate=0 need_sentinel_pull=0
   local -a reasons=()
 
+  # Reasons items are either top-level (a complete single-line reason) or
+  # nested under a category. Nested items keep the 2-space prefix that
+  # build_state_drift_summary / sentinel_drift_summary already emit — the
+  # printer below detects that prefix and renders them as indented
+  # continuation lines (no bullet marker).
   if ((DRIFT_IMAGES == 1)); then
     need_rebuild=1
     reasons+=("build inputs changed since last build:")
     while IFS= read -r line; do
-      [[ -n "$line" ]] && reasons+=("  ${line}")
+      [[ -n "$line" ]] && reasons+=("$line")
     done <<<"$DRIFT_IMAGES_SUMMARY"
   fi
 
-  # Sentinel drift — pull-only, no local rebuild required.
+  # Sentinel drift — pull-only, no local rebuild required. Flatten to a
+  # top-level reason (no category intro) since sentinel always drifts on a
+  # single dimension.
   if ((DRIFT_SENTINEL == 1)); then
     need_sentinel_pull=1
     need_recreate=1
-    reasons+=("sentinel image advanced:")
     while IFS= read -r line; do
-      [[ -n "$line" ]] && reasons+=("  ${line}")
+      [[ -n "$line" ]] && reasons+=("${line#  }")
     done <<<"$DRIFT_SENTINEL_SUMMARY"
   fi
 
@@ -1918,7 +1940,13 @@ cmd_update() {
   echo "Reasons:"
   local r
   for r in "${reasons[@]:-}"; do
-    [[ -n "$r" ]] && echo "  - $r"
+    [[ -z "$r" ]] && continue
+    # A leading "  " marks a nested continuation under the previous
+    # category line — render without a bullet, indented under the `  - `.
+    case "$r" in
+    "  "*) echo "    ${r#  }" ;;
+    *) echo "  - $r" ;;
+    esac
   done
   echo ""
   echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, keys, config), ${GNOKMS_DATA}/ (keystore),"
