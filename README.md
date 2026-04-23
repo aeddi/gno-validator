@@ -27,6 +27,8 @@ Edit `validator.env` and set:
 - `GNOLAND_P2P_PORT` — host port mapped to gnoland P2P (default: `26656`)
 - `GNOLAND_RPC_LADDR` — interface gnoland RPC binds to (default: `0.0.0.0`). Use `127.0.0.1` when exposing RPC through a reverse proxy only.
 - `GNOLAND_P2P_LADDR` — interface gnoland P2P binds to (default: `0.0.0.0`). Use `127.0.0.1` only if this node should not accept inbound peer connections.
+- `GNOLAND_EXTRA_FLAGS` — extra flags appended to `gnoland start`, word-split on whitespace. Default: `--skip-genesis-sig-verification`. Add or remove flags as needed (e.g. `--skip-genesis-sig-verification --log-level info`).
+- `GNOLAND_NTP_UPDATE` — any non-empty value enables in-container NTP sync at gnoland startup (tries `ntpd`, then `rdate`, then an HTTP `Date` header; first success wins). Default: `1`. Set empty to skip (useful when the host already runs `chronyd`/`systemd-timesyncd`).
 - `GNOLAND_LOG_SIZE` — number of 1 GB gnoland log files to keep (default: `3`, i.e. 3 GB total)
 
 ### 2. Generate the signing identity
@@ -50,11 +52,12 @@ $EDITOR config.overrides
 Set the required fields:
 
 - `moniker` — human-readable node name
-- `p2p.external_address` — your public P2P address, e.g. `tcp://<your-ip>:26656`
-- `p2p.seeds` — comma-separated seed nodes for initial peer discovery
+- `p2p.external_address` — your public P2P address, e.g. `<your-ip>:26656`
 - `p2p.persistent_peers` — comma-separated peers to maintain persistent connections to
 - `telemetry.service_instance_id` — node identifier tagged on OTLP traces (e.g. your moniker)
 - `telemetry.service_name` — service identifier tagged on OTLP traces (e.g. the chain ID)
+
+Optional — add any other gnoland config keys (e.g. `p2p.seeds`, `consensus.timeout_commit`). The commented block at the top of `config.overrides.example` lists the system-hardcoded keys that the entrypoint always overrides.
 
 Each entry in `config.overrides` is applied to `gnoland-data/config/config.toml` on every
 node start and `make infos` run. Mandatory settings (remote signer, telemetry) are
@@ -103,33 +106,33 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 ### Lifecycle
 
-| Command                 | What it does                                                                                                                                                | Cost                                            |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `make start`            | First run: builds images + creates containers. Otherwise resumes stopped containers.                                                                        | Free after first run.                           |
-| `make stop`             | Stops services but keeps containers (no recreate).                                                                                                          | Free.                                           |
-| `make restart`          | `stop` + `start`. Re-applies `config.overrides` on the way up.                                                                                              | Free. No password prompt.                       |
-| `make update [force=1]` | Rebuilds images if build inputs changed, recreates containers if `validator.env` / `docker-compose.yml` changed. `force=1` does both unconditionally.       | Rebuild minutes; recreate wipes container logs. |
-| `make reset`            | Wipes chain state (`db`, `wal`, `priv_validator_state.json`). Prompts to stop and restart around the wipe. Preserves keystore, validator keys, and node_id. | Destructive on chain DB.                        |
+| Command                 | What it does                                                                                                                                                                                    | Cost                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `make start`            | First run: builds images + creates containers. Stopped containers: resumes them (preserves container logs). Already running: no-op, prints a drift report if any input changed since last boot. | Free after first run.                           |
+| `make stop`             | Stops services but keeps containers (no recreate). Idempotent.                                                                                                                                  | Free.                                           |
+| `make restart`          | `stop` + `start`. Re-applies `config.overrides` on the way up.                                                                                                                                  | Free.                                           |
+| `make update [force=1]` | Rebuilds images if build inputs changed, pulls sentinel on digest drift, recreates containers if `validator.env` / `docker-compose.yml` changed. `force=1` does everything unconditionally.     | Rebuild minutes; recreate wipes container logs. |
+| `make reset [yes=1]`    | Wipes chain state (`db`, `wal`, `priv_validator_state.json`). Prompts to stop and restart around the wipe; `yes=1` skips all prompts. Preserves keystore, validator keys, and node_id.          | Destructive on chain DB.                        |
 
 ### Build (rarely needed manually)
 
-| Command                | What it does                                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make build [force=1]` | Builds images whose labels don't match the current commit / Dockerfile / entrypoint. `force=1` rebuilds anyway. `start` and `update` call this automatically. |
+| Command                | What it does                                                                                                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make build [force=1]` | Builds images when `.build-state` doesn't match the current inputs (gno commit, `Dockerfile`, entrypoints) or the tagged images are missing. `force=1` rebuilds anyway. `start` and `update` call this automatically. |
 
 ### Inspection
 
-| Command                     | What it does                                                                                                                                                                                                                                                                                                   |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails).                                                                                                              |
-| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                                                                                                                                          |
-| `make logs [since=<d>]`     | Merged TUI of gnoland + gnokms + sentinel logs via [gonzo](https://github.com/control-theory/gonzo). Per-service defaults: gnoland=1h, gnokms/sentinel=24h. `since=X` overrides all three. See [Gonzo TUI cheatsheet](#gonzo-tui-cheatsheet) for keybindings. Auto-installed under `.tools/bin/` on first use. |
+| Command                     | What it does                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails).                                                                                                                                                                                                                        |
+| `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                                                                                                                                                                                                                                                    |
+| `make logs [since=<d>]`     | Merged TUI of gnoland + gnokms + sentinel logs via [gonzo](https://github.com/control-theory/gonzo). Per-service defaults: gnoland=1h, gnokms/sentinel=24h. `since=X` overrides all three. Each line is tagged `service.name` so the built-in Service column filters by origin. Auto-installed under `.tools/bin/` on first use; config lives at `.tools/gonzo.yml` (tracked). Press `?` inside the TUI for keybindings. |
 
 ### Cleanup
 
-| Command                   | What it does                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `make clean-imgs [yes=1]` | Remove all `gno-validator-*` Docker images. `yes=1` skips the confirmation prompt. |
+| Command                           | What it does                                                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make clean-imgs [all=1] [yes=1]` | Default: remove stale `gno-validator-*` tags (anything not matching the current `.build-state`). `all=1` removes all gno-validator images and the sentinel image too. `yes=1` skips the confirm prompt. Refuses if any container still references a targeted image. |
 
 ### Setup
 
@@ -137,29 +140,6 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 | ------------------- | --------------------------------------------------------------- |
 | `make gen-identity` | Generate the validator signing identity in the gnokms keystore. |
 | `make help`         | Show the target list.                                           |
-
-### Gonzo TUI cheatsheet
-
-`make logs` opens a gonzo TUI streaming all three services merged. Each line is tagged `service.name=<gnoland|gnokms|sentinel>` for filtering.
-
-| Action                                | Key                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| **Filter by service** (regex)         | `/` then e.g. `gnoland` or `gnoland\|gnokms`, Enter. Empty to reset. |
-| Filter by severity                    | `Ctrl+F` opens the severity modal                                    |
-| Search / highlight                    | `s`                                                                  |
-| Show all fields of current line       | `Enter` (details modal)                                              |
-| Column config (hide Host, add module) | `C` (uppercase) → Space toggles, Enter applies                       |
-| Toggle Host/Service column pair       | `c` (lowercase)                                                      |
-| Toggle log-time vs receive-time       | `T`                                                                  |
-| Pause / resume                        | `Space`                                                              |
-| Navigate rows / sections              | `↑↓` / `j` `k`, `Tab` / `Shift+Tab`                                  |
-| Jump to latest (resume autoscroll)    | `End`                                                                |
-| Quit                                  | `q`                                                                  |
-| Full help                             | `?`                                                                  |
-
-Column tweaks (`C` modal) are **per-session** — gonzo v0.3.2 has no config.yml key for column visibility, so you'll want to uncheck "Host Name" (always empty for us) and tick `module` from Discovered Attributes each time you open the TUI. Upstream hasn't added a config hook yet.
-
-Exclusion (hide one service) isn't supported by gonzo's regex (RE2, no negative lookaround). Work around with inverse inclusion: `gnoland|gnokms` instead of "not sentinel".
 
 ### Change → command cheat sheet
 
@@ -180,7 +160,7 @@ Downloaded tools (gonzo, jq) live under `.tools/bin/` (gitignored, auto-fetched 
 
 ## Architecture
 
-- **gnoland** exposes RPC (`GNOLAND_RPC_PORT`, default `26657`) and P2P (`GNOLAND_P2P_PORT`, default `26656`) to the host. On startup, the container syncs the system clock via NTP before launching gnoland, ensuring accurate timing when waiting for `genesis_time` to elapse.
+- **gnoland** exposes RPC (`GNOLAND_RPC_PORT`, default `26657`) and P2P (`GNOLAND_P2P_PORT`, default `26656`) to the host. When `GNOLAND_NTP_UPDATE` is set (default), the container syncs its clock before launching gnoland, trying `ntpd`, then `rdate`, then an HTTPS `Date` header until one succeeds. The container has `CAP_SYS_TIME`, so on a Linux host this also updates the host's clock — disable `GNOLAND_NTP_UPDATE` if another NTP daemon already manages the host.
 - **gnokms** communicates with gnoland over a Unix socket — no network port is exposed.
 - **sentinel** collects gnoland RPC status, container logs, OTLP traces, and system resources, then forwards them to a central watchtower server. Image is pulled from `ghcr.io/aeddi/gno-watchtower/sentinel` (tag set via `SENTINEL_IMAGE_TAG`).
 - `gnoland-data/`, `gnokms-data/`, and `genesis.json` are gitignored — back them up.
