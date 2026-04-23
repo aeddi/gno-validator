@@ -1213,9 +1213,9 @@ cmd_infos() {
   echo "=== Build Information ==="
   local label_reason="image label not set — rebuild with 'make update'"
   _infos_field "build date" "$label_reason" image_label "$GNOLAND_IMAGE" build.date
-  _infos_field "gno commit" "$label_reason" image_label "$GNOLAND_IMAGE" gno.commit
-  _infos_field "gno version" "$label_reason" image_label "$GNOLAND_IMAGE" gno.version
   _infos_field "gno repo" "$label_reason" image_label "$GNOLAND_IMAGE" gno.repo
+  _infos_field "gno version" "$label_reason" image_label "$GNOLAND_IMAGE" gno.version
+  _infos_field "gno commit" "$label_reason" image_label "$GNOLAND_IMAGE" gno.commit
   local sentinel_reason="sentinel image not pulled — run 'make start' or 'make update'"
   _infos_field "sentinel image" "$sentinel_reason" sentinel_image_ref
   _infos_field_trunc "sentinel digest" "$sentinel_reason" 19 sentinel_local_digest
