@@ -1461,10 +1461,22 @@ cmd_logs() {
   fi
 
   # jq program that runs once per input line (-R, raw string input):
-  #   - parse the line as JSON; on success, merge in service.name
+  #   - parse the line as JSON; on success, merge in service.name.
   #   - on failure (plain text, logfmt, entrypoint banners), wrap as
   #     { service.name, msg } so gonzo sees one JSON event per line.
-  local tag_program='. as $raw | try (fromjson + {"service.name": $s}) catch {"service.name": $s, "msg": $raw}'
+  #   - normalize numeric `ts` (gnoland's Unix-epoch seconds) into an
+  #     RFC3339 `timestamp` string. gonzo's numeric-timestamp parser has
+  #     a magnitude threshold bug (any Unix-seconds value after 2001-09
+  #     gets misread as milliseconds, showing January 1970). Feeding a
+  #     string avoids the buggy branch entirely.
+  local tag_program='. as $raw |
+    try (
+      fromjson
+      | (if (.ts | type) == "number"
+           then . + {timestamp: (.ts | todateiso8601)} | del(.ts)
+           else . end)
+      | . + {"service.name": $s}
+    ) catch {"service.name": $s, "msg": $raw}'
 
   # Architecture: gonzo runs in the FOREGROUND reading from a FIFO; three
   # feeder pipelines write to that FIFO in the background. When gonzo exits
