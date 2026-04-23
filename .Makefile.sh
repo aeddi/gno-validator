@@ -288,6 +288,9 @@ resolve_gno_inputs() {
   if [[ -z "$commit" ]]; then
     # Offline or bad ref — fall back to the version string so downstream can
     # still populate labels and attempt builds from a possibly-cached clone.
+    # Upstream-commit drift can't be detected in this mode; warn so the operator
+    # knows not to trust a "no drift" answer on this run.
+    echo "Warning: could not resolve ${version} on ${repo} to a commit hash (offline or invalid ref). Using version string as commit; upstream-commit drift won't be detected." >&2
     commit="$version"
   fi
   export GNO_COMMIT_HASH="$commit"
@@ -761,13 +764,13 @@ drift_analyze() {
   fi
 
   # Applied-overrides drift — written by the entrypoint after do_init().
+  # When the file is absent, compare against the hash of an empty file (same
+  # value the entrypoint writes when /config.overrides is missing).
   local curr_overrides=""
-  [[ -f "$OVERRIDES_FILE" ]] && curr_overrides="$(sha256_of_file "$OVERRIDES_FILE")"
-  if [[ -z "$curr_overrides" ]]; then
-    # No overrides file on disk; treat the empty-file sha as the baseline.
-    curr_overrides="$(printf '' | {
-      if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi
-    } | awk '{print $1}')"
+  if [[ -f "$OVERRIDES_FILE" ]]; then
+    curr_overrides="$(sha256_of_file "$OVERRIDES_FILE")"
+  else
+    curr_overrides="$(sha256_of_file /dev/null)"
   fi
   if [[ -f "$APPLIED_OVERRIDES_FILE" ]]; then
     local applied
@@ -1114,15 +1117,17 @@ cmd_gen_identity() {
 
 # Print one data field, or a degraded `(unavailable — <reason>)` on failure.
 # Keeps cmd_infos printing the rest of the node info even if a single call
-# (e.g. gnoland config get) misbehaves.
+# (e.g. gnoland config get) misbehaves. The reason string should tell the
+# operator what's wrong and what to do about it.
+# Args: <label> <reason-if-fails> <command...>
 _infos_field() {
-  local label="$1"
-  shift
+  local label="$1" reason="$2"
+  shift 2
   local value
   if value="$("$@" 2>/dev/null)" && [[ -n "$value" ]]; then
     printf '%-18s %s\n' "${label}:" "$value"
   else
-    printf '%-18s (unavailable)\n' "${label}:"
+    printf '%-18s (unavailable — %s)\n' "${label}:" "$reason"
   fi
 }
 
@@ -1169,23 +1174,25 @@ cmd_infos() {
       echo "validator pub_key: (keystore unreadable — check permissions on ${GNOKMS_DATA}/keystore)"
     fi
   fi
-  _infos_field "node_id" gnoland_run gnoland secrets get node_id.id --raw
-  _infos_field "moniker" gnoland_run gnoland config get moniker --raw
+  local node_reason="gnoland throwaway run failed — check 'make logs-gnoland'"
+  _infos_field "node_id" "$node_reason" gnoland_run gnoland secrets get node_id.id --raw
+  _infos_field "moniker" "$node_reason" gnoland_run gnoland config get moniker --raw
   echo ""
 
   resolve_ports
   echo "=== Network Configuration ==="
-  _infos_field "seeds" gnoland_run gnoland config get p2p.seeds --raw
-  _infos_field "persistent peers" gnoland_run gnoland config get p2p.persistent_peers --raw
+  _infos_field "seeds" "$node_reason" gnoland_run gnoland config get p2p.seeds --raw
+  _infos_field "persistent peers" "$node_reason" gnoland_run gnoland config get p2p.persistent_peers --raw
   printf '%-18s tcp://%s:%s\n' "p2p listener:" "${GNOLAND_P2P_LADDR}" "${GNOLAND_P2P_PORT}"
   printf '%-18s tcp://%s:%s\n' "rpc listener:" "${GNOLAND_RPC_LADDR}" "${GNOLAND_RPC_PORT}"
   echo ""
 
   echo "=== Build Information ==="
-  _infos_field "gno commit" image_label "$GNOLAND_IMAGE" gno.commit
-  _infos_field "gno version" image_label "$GNOLAND_IMAGE" gno.version
-  _infos_field "gno repo" image_label "$GNOLAND_IMAGE" gno.repo
-  _infos_field "build date" image_label "$GNOLAND_IMAGE" build.date
+  local label_reason="image label not set — rebuild with 'make update'"
+  _infos_field "gno commit" "$label_reason" image_label "$GNOLAND_IMAGE" gno.commit
+  _infos_field "gno version" "$label_reason" image_label "$GNOLAND_IMAGE" gno.version
+  _infos_field "gno repo" "$label_reason" image_label "$GNOLAND_IMAGE" gno.repo
+  _infos_field "build date" "$label_reason" image_label "$GNOLAND_IMAGE" build.date
   echo ""
 
   echo "=== File Checksums (SHA-256) ==="
@@ -1556,6 +1563,12 @@ _http_get() {
   elif command -v wget >/dev/null 2>&1; then
     wget -qO- --timeout=2 "$url" 2>/dev/null
   else
+    # Warn once per process so watch-mode doesn't spam. Without an HTTP client
+    # the operator would otherwise see a misleading "unreachable" status line.
+    if [[ -z "${_HTTP_GET_WARNED:-}" ]]; then
+      echo "Warning: neither curl nor wget is installed — can't probe RPC. Install one to get real status." >&2
+      _HTTP_GET_WARNED=1
+    fi
     return 1
   fi
 }
@@ -1564,16 +1577,20 @@ cmd_reset() {
   preflight docker_warn
 
   # Nothing-to-reset guards (cheap, before any prompt).
-  if [[ ! -d "$GNOLAND_DATA" ]]; then
+  if [[ ! -d "$GNOLAND_DATA" ]] || ! dir_has_entries "$GNOLAND_DATA"; then
     echo "Nothing to reset — ${GNOLAND_DATA} not initialized."
     return 0
   fi
   local pv_state="${GNOLAND_DATA}/secrets/priv_validator_state.json"
   local pv_height=""
   [[ -f "$pv_state" ]] && pv_height="$(awk -F'"' '/"height"/{print $4; exit}' "$pv_state" 2>/dev/null || true)"
-  if [[ ! -d "${GNOLAND_DATA}/db" && ! -d "${GNOLAND_DATA}/wal" && "$pv_height" == "0" ]]; then
-    echo "Already at clean state — nothing to reset."
-    return 0
+  # Initialized but no chain state yet (fresh init, node never started) and
+  # priv_validator_state already at height=0 → nothing to do.
+  if [[ ! -d "${GNOLAND_DATA}/db" && ! -d "${GNOLAND_DATA}/wal" ]]; then
+    if [[ ! -f "$pv_state" || "$pv_height" == "0" ]]; then
+      echo "Already at clean state — nothing to reset."
+      return 0
+    fi
   fi
 
   # Docker state: only classify if docker was reachable.
