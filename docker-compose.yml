@@ -14,7 +14,7 @@ services:
         ENTRYPOINT_HASH: ${ENTRYPOINT_HASH:-}
     image: gno-validator-gnokms
     environment:
-      GNOKMS_PASSWORD: ${GNOKMS_PASSWORD}
+      GNOKMS_PASSWORD: ${GNOKMS_PASSWORD:-}
     volumes:
       - ./gnokms-data:/gnokms-data
       - gnokms-sock:/sock
@@ -38,8 +38,11 @@ services:
         ENTRYPOINT_HASH: ${ENTRYPOINT_HASH:-}
     image: gno-validator-gnoland
     user: '${HOST_UID:-0}:${HOST_GID:-0}'
+    labels:
+      - gno-validator.validator-env.sha256=${VALIDATOR_ENV_SHA256:-}
+      - gno-validator.compose-file.sha256=${COMPOSE_FILE_SHA256:-}
     environment:
-      GNOLAND_EARLY_START: ${GNOLAND_EARLY_START}
+      GNOLAND_EARLY_START: ${GNOLAND_EARLY_START:-}
       GNOLAND_NTP_UPDATE: ${GNOLAND_NTP_UPDATE:-1}
     command:
       - gnoland
