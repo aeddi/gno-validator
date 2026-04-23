@@ -33,7 +33,7 @@ $EDITOR config.overrides
 
 ### 3. `sentinel.toml`
 
-Sentinel sidecar config. Ask your watchtower operator for the server URL and auth token, then copy the example and set `server.url` / `server.token` — leaving the `<placeholders>` unchanged causes the sentinel container to crash-loop with a clear validation error at startup. Full field reference: [gno-watchtower](https://github.com/aeddi/gno-watchtower).
+Sentinel sidecar config. Ask your watchtower operator for the server URL and auth token, then copy the example and set `server.url` / `server.token` — leaving the `<placeholders>` unchanged causes the sentinel container to crash-loop with a clear validation error at startup. Full field reference: [gno-watchtower → Sentinel config](https://github.com/aeddi/gno-watchtower#sentinel-config-configtoml).
 
 ```sh
 cp sentinel.toml.example sentinel.toml
@@ -107,7 +107,7 @@ Optional — any other gnoland config key (e.g. `p2p.seeds`, `consensus.timeout_
 
 ### sentinel.toml reference
 
-Sentinel's format is defined upstream. See [gno-watchtower](https://github.com/aeddi/gno-watchtower) for every field. The only values you must set for this project are `server.url` and `server.token` (supplied by the watchtower operator). `sentinel.toml` is gitignored and stays local to each operator.
+Sentinel's format is defined upstream. See [gno-watchtower → Sentinel config](https://github.com/aeddi/gno-watchtower#sentinel-config-configtoml) for every field. The only values you must set for this project are `server.url` and `server.token` (supplied by the watchtower operator). `sentinel.toml` is gitignored and stays local to each operator.
 
 ---
 
