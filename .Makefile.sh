@@ -1941,10 +1941,10 @@ cmd_update() {
   local r
   for r in "${reasons[@]:-}"; do
     [[ -z "$r" ]] && continue
-    # A leading "  " marks a nested continuation under the previous
-    # category line — render without a bullet, indented under the `  - `.
+    # A leading "  " marks a sub-item under the previous category line —
+    # render as an indented sub-bullet.
     case "$r" in
-    "  "*) echo "    ${r#  }" ;;
+    "  "*) echo "    - ${r#  }" ;;
     *) echo "  - $r" ;;
     esac
   done
