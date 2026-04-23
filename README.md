@@ -123,7 +123,7 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails). |
 | `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                             |
-| `make logs-gnoland`         | Pretty-print streaming gnoland JSON logs with [hl](https://github.com/pamburus/hl). `SINCE=<duration>` controls history (default 1h). Auto-installed under `.tools/bin/` on first use.            |
+| `make logs-gnoland`         | Pretty-print streaming gnoland JSON logs with [hl](https://github.com/pamburus/hl). `since=<duration>` controls history (default 1h). Auto-installed under `.tools/bin/` on first use.            |
 | `make logs-gnokms`          | Follow gnokms logs.                                                                                                                                                                               |
 | `make logs-sentinel`        | Follow sentinel logs.                                                                                                                                                                             |
 

@@ -15,9 +15,9 @@
 # Inspection:
 #   status         [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                          Print node identity, network config, build metadata, checksums
-#   logs-gnoland   [SINCE=<d>]     Pretty-print streaming gnoland JSON logs — downloads hl on first run (default: 1h)
-#   logs-gnokms    [SINCE=<d>]     Follow gnokms logs (SINCE= optional)
-#   logs-sentinel  [SINCE=<d>]     Follow sentinel logs (SINCE= optional)
+#   logs-gnoland   [since=<d>]     Pretty-print streaming gnoland JSON logs — downloads hl on first run (default: 1h)
+#   logs-gnokms    [since=<d>]     Follow gnokms logs (since= optional)
+#   logs-sentinel  [since=<d>]     Follow sentinel logs (since= optional)
 #
 # Cleanup:
 #   clean-imgs     [all=1] [yes=1] Remove stale images (default). all=1 also removes current images and sentinel.
@@ -39,11 +39,13 @@ export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
 # Arg → env pass-through: `make build force=1` → FORCE=1, `make status watch=5` → WATCH=5,
-# `make clean-imgs yes=1` → YES=1, `make clean-imgs all=1` → ALL=1.
+# `make clean-imgs yes=1` → YES=1, `make clean-imgs all=1` → ALL=1,
+# `make logs-gnoland since=30m` → SINCE=30m.
 export FORCE := $(force)
 export WATCH := $(watch)
 export YES   := $(yes)
 export ALL   := $(all)
+export SINCE := $(since)
 
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
