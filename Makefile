@@ -3,33 +3,31 @@
 # Usage: make <target> [args]
 #
 # Lifecycle:
-#   start                          Start services (first run: builds images if needed)
-#   stop                           Stop services without removing containers
-#   restart                        Stop then start (re-applies config.overrides, no password prompt)
-#   update         [force=1]       Rebuild images and/or recreate containers if anything
-#                                  has changed since the last build/start. force=1 does it anyway.
-#                                  Recreate loses container logs but preserves chain data + keystore.
-#   reset                          Wipe chain state (db, wal, priv_validator_state.json) with
-#                                  interactive prompts to stop/start containers around the reset.
+#   start                            Start services (first run: builds images if needed)
+#   stop                             Stop services without removing containers
+#   restart                          Stop then start (re-applies config.overrides, no password prompt)
+#   reset                            Wipe chain state (db, wal, priv_validator_state.json).
+#   update         [force=1]         Rebuild images and/or recreate containers if anything
+#                                    has changed since the last build/start. force=1 does it anyway.
+#                                    Recreate loses container logs but preserves chain data + keystore.
 #
 # Inspection:
-#   status         [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
-#   infos                          Print node identity, network config, build metadata, checksums
-#   logs           [since=<d>]     Open merged TUI of gnoland + gnokms + sentinel logs — downloads gonzo on first run.
-#                                  Per-service defaults: gnoland=1h, gnokms/sentinel=24h. since=<d> overrides all three.
+#   status         [watch=<sec>]     Show block height, peers, and validator status (watch= refreshes every N seconds)
+#   infos                            Print node identity, network config, build metadata, checksums
+#   logs           [since=<d>]       Open merged TUI of gnoland + gnokms + sentinel logs — downloads gonzo on first run.
 #
 # Cleanup:
-#   clean-imgs     [all=1] [yes=1] Remove stale images (default). all=1 also removes current images and sentinel.
-#                                  yes=1 skips the confirm prompt.
+#   clean-imgs     [all=1] [yes=1]   Remove stale images (default). all=1 also removes current images and sentinel.
+#                                    yes=1 skips the confirm prompt.
 #
 # Setup:
-#   gen-identity                   Generate the validator signing identity in the gnokms keystore
-#   help                           Show this help message
+#   gen-identity                     Generate the validator signing identity in the gnokms keystore
+#   help                             Show this help message
 #
 # Configuration:
-#   validator.env                  Environment variables (copy from validator.env.example)
-#   config.overrides               Per-node gnoland config (copy from config.overrides.example)
-#   genesis.json                   Chain genesis file (user-provided)
+#   validator.env                    Environment variables (copy from validator.env.example)
+#   config.overrides                 Per-node gnoland config (copy from config.overrides.example)
+#   genesis.json                     Chain genesis file (user-provided)
 
 SHELL := /bin/bash
 
