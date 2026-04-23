@@ -45,10 +45,10 @@ GNOLAND_CONTAINER="gno-validator-gnoland-1"
 GNOKMS_CONTAINER="gno-validator-gnokms-1"
 SENTINEL_CONTAINER="gno-validator-sentinel-1"
 
-LNAV_VERSION="0.13.2"
+HL_VERSION="0.36.1"
 JQ_VERSION="1.7.1"
 TOOLS_BIN_DIR=".tools/bin"
-LNAV_BIN="${TOOLS_BIN_DIR}/lnav"
+HL_BIN="${TOOLS_BIN_DIR}/hl"
 JQ_BIN="${TOOLS_BIN_DIR}/jq"
 
 # Host UID/GID are consumed by docker-compose.yml for gnoland's user mapping
@@ -969,23 +969,19 @@ _download_url() {
   fi
 }
 
-install_lnav() {
-  [[ -x "$LNAV_BIN" ]] && return 0
+install_hl() {
+  [[ -x "$HL_BIN" ]] && return 0
 
-  if ! command -v unzip >/dev/null 2>&1; then
-    echo "Error: unzip is required to extract lnav" >&2
-    return 1
-  fi
   local os arch archive
   os="$(uname -s)"
   arch="$(uname -m)"
   case "${os}/${arch}" in
-  Darwin/arm64) archive="lnav-${LNAV_VERSION}-aarch64-macos.zip" ;;
-  Darwin/*) archive="lnav-${LNAV_VERSION}-x86_64-macos.zip" ;;
-  Linux/aarch64) archive="lnav-${LNAV_VERSION}-linux-musl-arm64.zip" ;;
-  Linux/*) archive="lnav-${LNAV_VERSION}-linux-musl-x86_64.zip" ;;
+  Darwin/arm64) archive="hl-macos-arm64.tar.gz" ;;
+  Darwin/x86_64) archive="hl-macos-x86_64.tar.gz" ;;
+  Linux/aarch64 | Linux/arm64) archive="hl-linux-arm64-musl.tar.gz" ;;
+  Linux/x86_64) archive="hl-linux-x86_64-musl.tar.gz" ;;
   *)
-    echo "Error: unsupported platform ${os}/${arch} for lnav" >&2
+    echo "Error: unsupported platform ${os}/${arch} for hl" >&2
     return 1
     ;;
   esac
@@ -994,17 +990,17 @@ install_lnav() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   local rc=0
-  echo "Downloading lnav v${LNAV_VERSION}..." >&2
+  echo "Downloading hl v${HL_VERSION}..." >&2
   if ! _download_url \
-    "https://github.com/tstack/lnav/releases/download/v${LNAV_VERSION}/${archive}" \
-    "${tmpdir}/lnav.zip"; then
+    "https://github.com/pamburus/hl/releases/download/v${HL_VERSION}/${archive}" \
+    "${tmpdir}/hl.tar.gz"; then
     rc=1
-  elif ! unzip -q "${tmpdir}/lnav.zip" "lnav-${LNAV_VERSION}/lnav" -d "$tmpdir"; then
+  elif ! tar -xzf "${tmpdir}/hl.tar.gz" -C "$tmpdir" hl; then
     rc=1
   else
-    mv "${tmpdir}/lnav-${LNAV_VERSION}/lnav" "$LNAV_BIN"
-    chmod +x "$LNAV_BIN"
-    echo "lnav installed at ${LNAV_BIN}" >&2
+    mv "${tmpdir}/hl" "$HL_BIN"
+    chmod +x "$HL_BIN"
+    echo "hl installed at ${HL_BIN}" >&2
   fi
   rm -rf "$tmpdir"
   return "$rc"
@@ -1440,11 +1436,16 @@ cmd_logs_gnoland() {
     ;;
   esac
   local since="${SINCE:-1h}"
-  if install_lnav; then
-    TERM=xterm-256color "$LNAV_BIN" -I ./.lnav \
-      <(_compose_noenv logs --since "$since" -f gnoland 2>/dev/null)
+  if install_hl; then
+    # --paging=never: streaming logs shouldn't invoke a pager.
+    # --color=always: hl's TTY-detection only looks at stdin (we're piping
+    # in), so it wouldn't auto-enable color. Force it.
+    # --no-log-prefix on compose logs strips the "gnoland-1  | " prefix so
+    # hl sees raw JSON per line.
+    _compose_noenv logs --no-log-prefix --since "$since" -f gnoland 2>/dev/null |
+      "$HL_BIN" --paging=never --color=always
   else
-    echo "lnav unavailable, falling back to plain logs..."
+    echo "hl unavailable, falling back to plain logs..."
     _compose_noenv logs --since "$since" -f gnoland
   fi
 }

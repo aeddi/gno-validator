@@ -123,7 +123,7 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `make status [watch=<sec>]` | Node status table (height, peers, validator VP, sync). `watch=N` refreshes every N seconds (requires jq — auto-installed under `.tools/bin/` if absent; falls back to raw JSON if install fails). |
 | `make infos`                | Validator identity, network config, build metadata, binary checksums.                                                                                                                             |
-| `make logs-gnoland`         | Interactive log TUI (lnav). `SINCE=<duration>` controls history (default 1h).                                                                                                                     |
+| `make logs-gnoland`         | Pretty-print streaming gnoland JSON logs with [hl](https://github.com/pamburus/hl). `SINCE=<duration>` controls history (default 1h). Auto-installed under `.tools/bin/` on first use.            |
 | `make logs-gnokms`          | Follow gnokms logs.                                                                                                                                                                               |
 | `make logs-sentinel`        | Follow sentinel logs.                                                                                                                                                                             |
 
@@ -155,7 +155,7 @@ up. On every subsequent start, gnoland's config is regenerated from scratch and
 
 `make build` writes `.build-state` (gitignored) recording the commit, version, repo, per-image content hashes, and the sentinel image digest resolved from ghcr. `make start` and `make update` read it back and report drift precisely (e.g., `gno commit advanced on chain/test12: 8513a68f → 9a2b4c1e`, or `sentinel image advanced on latest: 8513a68f → 9a2b4c1e`). The gnoland commit check hits `git ls-remote`, and the sentinel check hits `docker manifest inspect`; both gracefully skip on network failure.
 
-Downloaded tools (lnav, jq) live under `.tools/bin/` (gitignored, auto-fetched on first use).
+Downloaded tools (hl, jq) live under `.tools/bin/` (gitignored, auto-fetched on first use).
 
 ## Architecture
 

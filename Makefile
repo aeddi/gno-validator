@@ -15,7 +15,7 @@
 # Inspection:
 #   status         [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                          Print node identity, network config, build metadata, checksums
-#   logs-gnoland   [SINCE=<d>]     Open interactive log TUI — downloads lnav on first run (default: 1h)
+#   logs-gnoland   [SINCE=<d>]     Pretty-print streaming gnoland JSON logs — downloads hl on first run (default: 1h)
 #   logs-gnokms    [SINCE=<d>]     Follow gnokms logs (SINCE= optional)
 #   logs-sentinel  [SINCE=<d>]     Follow sentinel logs (SINCE= optional)
 #
