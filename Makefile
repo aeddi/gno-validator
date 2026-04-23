@@ -16,16 +16,15 @@
 #   status         [watch=<sec>]   Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                          Print node identity, network config, build metadata, checksums
 #   logs-gnoland   [SINCE=<d>]     Open interactive log TUI — downloads lnav on first run (default: 1h)
-#   logs-gnokms                    Follow gnokms logs
-#   logs-sentinel                  Follow sentinel logs
+#   logs-gnokms    [SINCE=<d>]     Follow gnokms logs (SINCE= optional)
+#   logs-sentinel  [SINCE=<d>]     Follow sentinel logs (SINCE= optional)
 #
 # Cleanup:
-#   clean-imgs     [yes=1]         Remove all gno-validator Docker images (yes=1 skips the prompt)
+#   clean-imgs     [all=1] [yes=1] Remove stale images (default). all=1 also removes current images and sentinel.
+#                                  yes=1 skips the confirm prompt.
 #
-# Setup / build:
+# Setup:
 #   gen-identity                   Generate the validator signing identity in the gnokms keystore
-#   build          [force=1]       Build missing images; skip when .build-state matches current inputs.
-#                                  Normally automatic via start/update; run manually for CI or debugging.
 #   help                           Show this help message
 #
 # Configuration:
@@ -40,10 +39,11 @@ export HOST_UID := $(shell id -u)
 export HOST_GID := $(shell id -g)
 
 # Arg → env pass-through: `make build force=1` → FORCE=1, `make status watch=5` → WATCH=5,
-# `make clean-imgs yes=1` → YES=1.
+# `make clean-imgs yes=1` → YES=1, `make clean-imgs all=1` → ALL=1.
 export FORCE := $(force)
 export WATCH := $(watch)
 export YES   := $(yes)
+export ALL   := $(all)
 
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
@@ -59,9 +59,6 @@ gen-identity:
 
 infos:
 	@$(SCRIPT) infos
-
-build:
-	@$(SCRIPT) build
 
 start:
 	@$(SCRIPT) start
@@ -92,3 +89,10 @@ status:
 
 clean-imgs:
 	@$(SCRIPT) clean-imgs
+
+# Targets below are for CI and debugging — not part of the normal workflow,
+# intentionally omitted from `make help`. Invoke directly when you need to
+# force a rebuild.
+
+build:
+	@$(SCRIPT) build
