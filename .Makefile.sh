@@ -482,6 +482,16 @@ sentinel_pull() {
   docker pull "$ref"
 }
 
+# Print the sentinel binary's reported version string by running `sentinel
+# version` inside the configured image. Requires the image to be locally
+# present — does not auto-pull to avoid slow surprises inside cmd_infos.
+sentinel_version() {
+  local ref
+  ref="$(sentinel_image_ref)"
+  docker image inspect "$ref" >/dev/null 2>&1 || return 1
+  docker run --rm --entrypoint sentinel "$ref" version 2>/dev/null
+}
+
 # ---- Image tag + content-hash helpers
 
 compute_content_hash() {
@@ -1202,15 +1212,14 @@ cmd_infos() {
 
   echo "=== Build Information ==="
   local label_reason="image label not set — rebuild with 'make update'"
+  _infos_field "build date" "$label_reason" image_label "$GNOLAND_IMAGE" build.date
   _infos_field "gno commit" "$label_reason" image_label "$GNOLAND_IMAGE" gno.commit
   _infos_field "gno version" "$label_reason" image_label "$GNOLAND_IMAGE" gno.version
   _infos_field "gno repo" "$label_reason" image_label "$GNOLAND_IMAGE" gno.repo
-  _infos_field "build date" "$label_reason" image_label "$GNOLAND_IMAGE" build.date
-  _infos_field_trunc "dockerfile hash" "$label_reason" 12 image_label "$GNOLAND_IMAGE" build.dockerfile_hash
-  _infos_field_trunc "entrypoint hash" "$label_reason" 12 image_label "$GNOLAND_IMAGE" build.entrypoint_hash
   local sentinel_reason="sentinel image not pulled — run 'make start' or 'make update'"
   _infos_field "sentinel image" "$sentinel_reason" sentinel_image_ref
   _infos_field_trunc "sentinel digest" "$sentinel_reason" 19 sentinel_local_digest
+  _infos_field "sentinel version" "$sentinel_reason" sentinel_version
   echo ""
 
   echo "=== File Checksums (SHA-256) ==="
