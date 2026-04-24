@@ -445,27 +445,24 @@ sentinel_tag_is_digest() {
 }
 
 sentinel_remote_digest() {
-  local ref
+  local ref digest
   ref="$(sentinel_image_ref)"
-  local out
-  out="$(docker manifest inspect "$ref" 2>/dev/null || true)"
-  if [[ -z "$out" ]]; then
-    # Warn once per process so watch-mode / repeated calls don't spam. Without
-    # this note, the operator running offline would silently miss sentinel
-    # drift ("image advanced on latest") and not know why.
+  # `docker buildx imagetools inspect`'s "Digest:" line is the top-level
+  # content digest — the index digest for multi-arch images, the manifest
+  # digest for single-arch. This matches what docker stores in the local
+  # image's `.RepoDigests` after pull, so local-vs-remote comparisons work
+  # regardless of the pulling platform. (`docker manifest inspect` on a
+  # multi-arch ref does NOT expose the index digest — it just lists the
+  # per-platform manifests inside, which never equal what we stored.)
+  digest="$(docker buildx imagetools inspect "$ref" 2>/dev/null |
+    awk '/^Digest:/{print $2; exit}')"
+  if [[ -z "$digest" ]]; then
+    # Warn once per process so watch-mode / repeated calls don't spam.
     if [[ -z "${_SENTINEL_REMOTE_WARNED:-}" ]]; then
-      echo "Note: can't reach ghcr for sentinel manifest (${ref}); sentinel drift check skipped this run." >&2
+      echo "Note: can't fetch sentinel manifest digest for ${ref} (registry unreachable or 'docker buildx' unavailable); sentinel drift check skipped this run." >&2
       _SENTINEL_REMOTE_WARNED=1
     fi
     return 0
-  fi
-  local digest=""
-  local jq_bin
-  if jq_bin="$(ensure_jq 2>/dev/null)" && [[ -n "$jq_bin" ]]; then
-    digest="$(printf '%s' "$out" | "$jq_bin" -r '.manifests[0].digest // .config.digest // empty' 2>/dev/null || true)"
-  fi
-  if [[ -z "$digest" ]]; then
-    digest="$(printf '%s' "$out" | grep -m1 -Eo 'sha256:[a-f0-9]{64}' || true)"
   fi
   printf '%s\n' "$digest"
 }
