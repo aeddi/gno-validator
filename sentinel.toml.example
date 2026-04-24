@@ -41,10 +41,12 @@ source = 'both'
 container_name = 'gno-validator-gnoland-1'
 
 # Config metadata collector — periodically captures gnoland config values.
+# Reads gnoland's config.toml via the read-only bind mount declared in docker-compose.yml
+# (./gnoland-data/config → /gnoland-config). fsnotify triggers a re-emit on every edit.
 [metadata]
 enabled = true
 check_interval = '10m0s'
-config_get_cmd = 'docker exec gno-validator-gnoland-1 gnoland config get %s -config-path /gnoland-data/config/config.toml'
+config_path = '/gnoland-config/config.toml'
 
 # Sentinel self-stats collector.
 [self]
