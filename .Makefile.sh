@@ -1179,8 +1179,17 @@ cmd_infos() {
   ensure_images warn-if-stale
 
   # Initialize gnoland-data on first run so subsequent config reads succeed.
+  # Also re-apply when config.overrides drifted from the last applied hash
+  # (otherwise `gnoland config get` would return stale values from config.toml
+  # after edits) or when the applied-hash file is missing entirely (legacy
+  # setups predating sha-tracking — re-apply once to establish the baseline).
+  # ensure_images warn-if-stale above already ran drift_analyze.
   if [[ ! -f "${GNOLAND_DATA}/config/config.toml" ]]; then
     echo "Initializing gnoland-data (first run)..."
+    init_gnoland_data
+    echo ""
+  elif ((DRIFT_OVERRIDES == 1)) || [[ ! -f "$APPLIED_OVERRIDES_FILE" ]]; then
+    echo "Re-applying config.overrides..."
     init_gnoland_data
     echo ""
   fi
