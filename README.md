@@ -10,7 +10,7 @@ A `sentinel` sidecar ships node metrics, logs, and OTLP traces to an external [g
 
 ## Migrating from gnokms
 
-If you're upgrading from a setup that used `gnokms`: this branch removes `gnokms` support entirely. The validator now signs locally with `gnoland-data/secrets/priv_validator_key.json` (auto-created on first start by `gnoland secrets init`). The old `gnokms-data/` directory is no longer used and can be deleted.
+If you're upgrading from a setup that used `gnokms`: this branch removes `gnokms` support entirely. The validator now signs locally with `gnoland-data/secrets/priv_validator_key.json` (auto-created on first start by `gnoland secrets init`). The old `gnokms-data/` directory is no longer used and can be deleted. The leftover `gno-validator-gnokms` Docker image (if present) can be removed with `docker rmi gno-validator-gnokms` — `make clean-imgs` does not touch it.
 
 **Your on-chain validator address will change** to the address shown by `make infos`. Re-stake / re-bond as needed if the old address held voting power.
 
