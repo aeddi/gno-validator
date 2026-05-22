@@ -6,8 +6,10 @@ set -eu
 # is set (host-side `make infos` uses this to materialize config without
 # starting the node).
 do_init() {
-  # `secrets init` errors if files already exist — that's expected, continue.
-  gnoland secrets init >/dev/null 2>&1 || true
+  # Initialize secrets only when missing — never overwrite an existing key.
+  if [ ! -f /gnoland-data/secrets/priv_validator_key.json ]; then
+    gnoland secrets init >/dev/null
+  fi
   gnoland config init -force >/dev/null
 
   # ---- Apply operator config overrides (moniker, peers, external address, etc.)
