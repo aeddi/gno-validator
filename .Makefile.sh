@@ -1195,40 +1195,11 @@ cmd_infos() {
   fi
 
   echo "=== Identity ==="
-  local gnokey_out="" has_keys=0
-  if dir_has_entries "${GNOKMS_DATA}/keystore"; then
-    has_keys=1
-    gnokey_out="$(docker run --rm \
-      --entrypoint gnokey \
-      -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
-      "$GNOKMS_IMAGE" \
-      list --home /gnokms-data/keystore 2>/dev/null || true)"
-  fi
-  if [[ -n "$gnokey_out" ]] && echo "$gnokey_out" | grep -q 'addr:'; then
-    echo "$gnokey_out" | awk '{
-        for (i = 1; i <= NF; i++) {
-            if ($i == "addr:") addr = $(i+1)
-            if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
-        }
-    } END {
-        print "validator address: " addr "\nvalidator pub_key: " pub
-    }'
-  elif ((!has_keys)); then
-    echo "validator address: (no keystore — run 'make gen-identity')"
-    echo "validator pub_key: (no keystore — run 'make gen-identity')"
-  else
-    classify_state
-    if [[ "${STATE_GNOKMS:-absent}" == "running" ]]; then
-      echo "validator address: (keystore locked by running gnokms; retry shortly)"
-      echo "validator pub_key: (keystore locked by running gnokms; retry shortly)"
-    else
-      echo "validator address: (keystore unreadable — check permissions on ${GNOKMS_DATA}/keystore)"
-      echo "validator pub_key: (keystore unreadable — check permissions on ${GNOKMS_DATA}/keystore)"
-    fi
-  fi
-  local node_reason="gnoland throwaway run failed — check 'make logs'"
-  _infos_field "node_id" "$node_reason" gnoland_run gnoland secrets get node_id.id --raw
-  _infos_field "moniker" "$node_reason" gnoland_run gnoland config get moniker --raw
+  local id_reason="gnoland throwaway run failed — check 'make logs'"
+  _infos_field "validator address" "$id_reason" gnoland_run gnoland secrets get validator_key.address --raw
+  _infos_field "validator pub_key" "$id_reason" gnoland_run gnoland secrets get validator_key.pub_key --raw
+  _infos_field "node_id" "$id_reason" gnoland_run gnoland secrets get node_id.id --raw
+  _infos_field "moniker" "$id_reason" gnoland_run gnoland config get moniker --raw
   echo ""
 
   resolve_ports
