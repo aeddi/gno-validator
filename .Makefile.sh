@@ -1050,7 +1050,7 @@ cmd_infos() {
 
   resolve_ports
   echo "=== Network Configuration ==="
-  _infos_field "persistent peers" "$node_reason" gnoland_run gnoland config get p2p.persistent_peers --raw
+  _infos_field "persistent peers" "$id_reason" gnoland_run gnoland config get p2p.persistent_peers --raw
   printf '%-18s tcp://%s:%s\n' "p2p listener:" "${GNOLAND_P2P_LADDR}" "${GNOLAND_P2P_PORT}"
   printf '%-18s tcp://%s:%s\n' "rpc listener:" "${GNOLAND_RPC_LADDR}" "${GNOLAND_RPC_PORT}"
   echo ""
