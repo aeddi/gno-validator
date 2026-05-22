@@ -1,27 +1,26 @@
-# Makefile — gno-validator: gnoland validator node with gnokms remote signing.
+# Makefile — gno-validator: gnoland validator node.
 #
 # Usage: make <target> [args]
 #
 # Lifecycle:
-#   start                            Start services (first run: builds images if needed)
+#   start                            Start services (first run: builds image if needed)
 #   stop                             Stop services without removing containers
-#   restart                          Stop then start (re-applies config.overrides, no password prompt)
+#   restart                          Stop then start (re-applies config.overrides)
 #   reset                            Wipe chain state (db, wal, priv_validator_state.json).
-#   update         [force=1]         Rebuild images and/or recreate containers if anything
+#   update         [force=1]         Rebuild image and/or recreate containers if anything
 #                                    has changed since the last build/start. force=1 does it anyway.
-#                                    Recreate loses container logs but preserves chain data + keystore.
+#                                    Recreate loses container logs but preserves chain data + validator key.
 #
 # Inspection:
 #   status         [watch=<sec>]     Show block height, peers, and validator status (watch= refreshes every N seconds)
 #   infos                            Print node identity, network config, build metadata, checksums
-#   logs           [since=<d>]       Open merged TUI of gnoland + gnokms + sentinel logs — downloads gonzo on first run.
+#   logs           [since=<d>]       Open merged TUI of gnoland + sentinel logs — downloads gonzo on first run.
 #
 # Cleanup:
-#   clean-imgs     [all=1] [yes=1]   Remove stale images (default). all=1 also removes current images and sentinel.
+#   clean-imgs     [all=1] [yes=1]   Remove stale images (default). all=1 also removes the current image and sentinel.
 #                                    yes=1 skips the confirm prompt.
 #
-# Setup:
-#   gen-identity                     Generate the validator signing identity in the gnokms keystore
+# Help:
 #   help                             Show this help message
 #
 # Configuration:
@@ -47,14 +46,11 @@ export SINCE := $(since)
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SCRIPT       := bash $(PROJECT_ROOT)/.Makefile.sh
 
-.PHONY: help gen-identity infos build start stop restart update reset \
+.PHONY: help infos build start stop restart update reset \
         logs status clean-imgs
 
 help:
 	@awk '/^# Usage:/,/^$$/{sub(/^# ?/,""); print}' $(MAKEFILE_LIST)
-
-gen-identity:
-	@$(SCRIPT) gen-identity
 
 infos:
 	@$(SCRIPT) infos

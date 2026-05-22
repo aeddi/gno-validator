@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # .Makefile.sh — shell backend for the gno-validator Makefile.
 #
-# Holds every operational command (build, start, stop, gen-identity, ...) so the
+# Holds every operational command (build, start, stop, infos, ...) so the
 # Makefile stays a thin dispatcher. Normally invoked as `make <target>`; can
 # also be run directly with `bash .Makefile.sh <command>` from the repo root.
 #
 # Usage: .Makefile.sh <command>
-# Commands: gen-identity, infos, build, start, stop, restart, logs,
+# Commands: infos, build, start, stop, restart, logs,
 #           status, reset, update, clean-imgs
 
 set -euo pipefail
@@ -35,14 +35,10 @@ GENESIS_FILE="genesis.json"
 COMPOSE_FILE="docker-compose.yml"
 APPLIED_OVERRIDES_FILE="gnoland-data/.applied-overrides.sha256"
 
-GNOKMS_IMAGE="gno-validator-gnokms"
 GNOLAND_IMAGE="gno-validator-gnoland"
-GNOKMS_DATA="gnokms-data"
 GNOLAND_DATA="gnoland-data"
-GNOKMS_KEYNAME="gnokms-docker-key"
 
 GNOLAND_CONTAINER="gno-validator-gnoland-1"
-GNOKMS_CONTAINER="gno-validator-gnokms-1"
 SENTINEL_CONTAINER="gno-validator-sentinel-1"
 
 GONZO_VERSION="0.3.2"
@@ -70,22 +66,6 @@ err_docker() {
 
 err_genesis_missing() {
   echo "Error: genesis.json not found. Place the chain genesis at ./${GENESIS_FILE} before continuing." >&2
-  return 1
-}
-
-err_keystore_missing() {
-  echo "Error: validator keystore is empty. Run 'make gen-identity' to create the signing key." >&2
-  return 1
-}
-
-err_gnokms_running() {
-  echo "Error: gnokms is running and holds the keystore lock. Run 'make stop' first." >&2
-  return 1
-}
-
-err_password_mismatch() {
-  echo "Error: GNOKMS_PASSWORD is not correct for the keystore." >&2
-  echo "       Re-run with the correct password, or update validator.env." >&2
   return 1
 }
 
@@ -154,25 +134,6 @@ env_has_value() {
   [[ -n "$value" ]]
 }
 
-# Prompt silently for VAR if not set in the environment and not present in validator.env.
-# On success, exports VAR so child processes (_compose) pick it up. On non-TTY
-# with no value available, errors out via err_non_tty.
-prompt_password_if_unset() {
-  local var="$1"
-  # ${!var:-} = value of $<var>, empty if unset (needed under `set -u`).
-  if [[ -n "${!var:-}" ]] || env_has_value "$var"; then
-    return 0
-  fi
-  if [[ ! -t 0 ]]; then
-    echo "Error: ${var} not set and no TTY for prompt. Set it in validator.env or the environment." >&2
-    return 1
-  fi
-  local value
-  read -r -s -p "${var}: " value
-  echo ""
-  export "$var=$value"
-}
-
 # ---- Preflight checks
 # Each check is a standalone function; `preflight` composes them in order and
 # aborts on the first failure with the canonical error.
@@ -192,20 +153,6 @@ check_env_note() {
 
 check_genesis() {
   [[ -f "$GENESIS_FILE" ]]
-}
-
-# True if the keystore directory has at least one entry (user identity present).
-check_keystore() {
-  dir_has_entries "${GNOKMS_DATA}/keystore"
-}
-
-# True if the gnokms service is NOT running. Used by gen-identity to avoid
-# lock contention on the keystore DB.
-check_gnokms_not_running() {
-  ! docker container inspect "$GNOKMS_CONTAINER" >/dev/null 2>&1 && return 0
-  local state
-  state="$(docker inspect --format '{{.State.Status}}' "$GNOKMS_CONTAINER" 2>/dev/null || echo "")"
-  [[ "$state" != "running" ]]
 }
 
 # preflight <check>... — runs checks in order; on first failure, emits the
@@ -236,18 +183,6 @@ preflight() {
     genesis)
       check_genesis || {
         err_genesis_missing
-        return 1
-      }
-      ;;
-    keystore)
-      check_keystore || {
-        err_keystore_missing
-        return 1
-      }
-      ;;
-    gnokms_not_running)
-      check_gnokms_not_running || {
-        err_gnokms_running
         return 1
       }
       ;;
@@ -395,12 +330,11 @@ _classify_one() {
 
 classify_state() {
   _classify_one "$GNOLAND_CONTAINER" STATE_GNOLAND STATE_STARTED_AT_GNOLAND
-  _classify_one "$GNOKMS_CONTAINER" STATE_GNOKMS STATE_STARTED_AT_GNOKMS
   _classify_one "$SENTINEL_CONTAINER" STATE_SENTINEL STATE_STARTED_AT_SENTINEL
 
   local present=0 running=0 restarting=0
   local svc
-  for svc in GNOLAND GNOKMS SENTINEL; do
+  for svc in GNOLAND SENTINEL; do
     local v="STATE_${svc}"
     case "${!v}" in
     absent) ;;
@@ -509,7 +443,6 @@ compute_content_hash() {
 content_hash_for() {
   local kind="$1"
   case "$kind" in
-  gnokms) compute_content_hash Dockerfile docker/gnokms-entrypoint.sh ;;
   gnoland) compute_content_hash Dockerfile docker/gnoland-entrypoint.sh ;;
   *)
     echo "content_hash_for: unknown kind '$kind'" >&2
@@ -529,12 +462,10 @@ image_tag_for() {
 
 write_build_state() {
   local out_file="$STATE_FILE"
-  local build_date gnokms_content gnoland_content gnokms_image gnoland_image
+  local build_date gnoland_content gnoland_image
   local sentinel_ref sentinel_digest
   build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  gnokms_content="$(content_hash_for gnokms)"
   gnoland_content="$(content_hash_for gnoland)"
-  gnokms_image="${GNOKMS_IMAGE}:$(image_tag_for gnokms "$GNO_COMMIT_HASH")"
   gnoland_image="${GNOLAND_IMAGE}:$(image_tag_for gnoland "$GNO_COMMIT_HASH")"
   sentinel_ref="$(sentinel_image_ref)"
   sentinel_digest="$(sentinel_local_digest)"
@@ -554,10 +485,8 @@ write_build_state() {
     echo "GNO_VERSION=\"${GNO_VERSION}\""
     echo "GNO_COMMIT=\"${GNO_COMMIT_HASH}\""
     echo ""
-    echo "GNOKMS_CONTENT_HASH=\"${gnokms_content}\""
     echo "GNOLAND_CONTENT_HASH=\"${gnoland_content}\""
     echo ""
-    echo "GNOKMS_IMAGE_TAG=\"${gnokms_image}\""
     echo "GNOLAND_IMAGE_TAG=\"${gnoland_image}\""
     echo ""
     echo "SENTINEL_IMAGE_REF=\"${sentinel_ref}\""
@@ -614,13 +543,8 @@ build_state_drift_summary() {
     drift=1
   fi
 
-  local curr_gnokms curr_gnoland
-  curr_gnokms="$(content_hash_for gnokms)"
+  local curr_gnoland
   curr_gnoland="$(content_hash_for gnoland)"
-  if [[ "${PREV_GNOKMS_CONTENT_HASH:-}" != "${curr_gnokms}" ]]; then
-    echo "  gnokms image content changed (Dockerfile or docker/gnokms-entrypoint.sh)"
-    drift=1
-  fi
   if [[ "${PREV_GNOLAND_CONTENT_HASH:-}" != "${curr_gnoland}" ]]; then
     echo "  gnoland image content changed (Dockerfile or docker/gnoland-entrypoint.sh)"
     drift=1
@@ -840,18 +764,14 @@ drift_warn() {
 # ---- Image ensure
 # Consolidated entry point for "make sure images are ready" logic. One mode per
 # target's needs:
-#   build-if-missing   — build only when an image is absent (infos, gen-identity)
+#   build-if-missing   — build only when the image is absent (infos)
 #   warn-if-stale      — build-if-missing + emit drift_warn on stale images (start, restart, status)
 #   rebuild-if-drift   — used by update/force=1 to unconditionally rebuild
 
 ensure_images() {
   local mode="${1:-build-if-missing}"
-  local gnokms_present=1 gnoland_present=1
-  docker image inspect "$GNOKMS_IMAGE" >/dev/null 2>&1 || gnokms_present=0
-  docker image inspect "$GNOLAND_IMAGE" >/dev/null 2>&1 || gnoland_present=0
-
-  if ((gnokms_present == 0)) || ((gnoland_present == 0)); then
-    echo "Building required images..."
+  if ! docker image inspect "$GNOLAND_IMAGE" >/dev/null 2>&1; then
+    echo "Building required image..."
     cmd_build
     echo ""
     return 0
@@ -873,35 +793,6 @@ ensure_images() {
     return 2
     ;;
   esac
-}
-
-# ---- Password ensure
-# Prompt if unset, then validate by running gnokms' `check` subcommand in a
-# throwaway container. On mismatch, err_password_mismatch.
-# $1 ("best-effort") makes the check non-fatal — used by stopped-container
-# fast-path where the operator opted to let gnokms crash-loop on mismatch.
-
-ensure_password() {
-  local mode="${1:-strict}"
-  # Best-effort + non-TTY + no password source → skip silently. The already-
-  # created container has its env baked from a previous up -d, so it will
-  # start fine; a wrong password would crash-loop the container (operator
-  # opted in to this tradeoff for the stopped-fast-path).
-  if [[ "$mode" == "best-effort" ]]; then
-    if [[ -z "${GNOKMS_PASSWORD:-}" ]] && ! env_has_value GNOKMS_PASSWORD && [[ ! -t 0 ]]; then
-      echo "Note: GNOKMS_PASSWORD not available (non-interactive) — skipping keystore validation." >&2
-      return 0
-    fi
-  fi
-  prompt_password_if_unset GNOKMS_PASSWORD || return 1
-  if _compose run --rm --no-deps -T gnokms check >/dev/null 2>&1; then
-    return 0
-  fi
-  if [[ "$mode" == "best-effort" ]]; then
-    echo "Warning: GNOKMS_PASSWORD validation was inconclusive. Continuing; gnokms will crash-loop if the password is wrong." >&2
-    return 0
-  fi
-  err_password_mismatch
 }
 
 # ---- Shared prompts
@@ -1060,7 +951,6 @@ ensure_jq() {
 # and by cmd_update after containers are torn down.
 _fresh_up() {
   # Caller has already verified validator.env presence / fallback behaviour.
-  ensure_password
   resolve_input_hashes
   # Docker bind-mounts a non-existent host path as a directory by default,
   # which would poison subsequent sha256_of_file calls (they'd see a dir, not
@@ -1080,55 +970,11 @@ _fresh_up() {
 Started. The gnoland entrypoint regenerates config on every start:
   1. resets ${GNOLAND_DATA}/config/config.toml to defaults
   2. applies user-defined overrides from ./${OVERRIDES_FILE}
-  3. applies hardcoded overrides (p2p.laddr, rpc.laddr, remote signer, telemetry)
+  3. applies hardcoded overrides (p2p.laddr, rpc.laddr, telemetry)
 EOF
 }
 
 # ---- Commands
-
-cmd_gen_identity() {
-  preflight docker env_note gnokms_not_running
-  ensure_image "$GNOKMS_IMAGE" gnokms
-  drift_analyze
-  drift_warn
-  mkdir -p "${GNOKMS_DATA}/keystore"
-
-  local password="${GNOKMS_PASSWORD:-}"
-  [[ -z "$password" ]] && password="$(env_get_raw GNOKMS_PASSWORD)"
-  if [[ -z "$password" ]]; then
-    if [[ ! -t 0 ]]; then
-      echo "Error: GNOKMS_PASSWORD not set and no TTY for prompt. Set it in validator.env or the environment." >&2
-      return 1
-    fi
-    read -r -s -p "GNOKMS_PASSWORD: " password
-    echo ""
-  fi
-
-  # gnokey prompts twice for confirmation — feed the password on both lines.
-  # Let gnokey handle existing-key cases via its own "overwrite?" prompt.
-  printf '%s\n%s\n' "$password" "$password" |
-    docker run --rm -i \
-      --user "${HOST_UID}:${HOST_GID}" \
-      --entrypoint gnokey \
-      -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
-      "$GNOKMS_IMAGE" \
-      add "$GNOKMS_KEYNAME" --home /gnokms-data/keystore --insecure-password-stdin
-
-  echo ""
-  echo "Identity created. Current keystore contents:"
-  docker run --rm \
-    --entrypoint gnokey \
-    -v "${PROJECT_ROOT}/${GNOKMS_DATA}:/gnokms-data" \
-    "$GNOKMS_IMAGE" \
-    list --home /gnokms-data/keystore 2>/dev/null | awk '
-      { for (i = 1; i <= NF; i++) {
-          if ($i == "addr:") addr = $(i+1)
-          if ($i == "pub:") { pub = $(i+1); sub(/,$/, "", pub) }
-      }}
-      END { print "  address: " addr; print "  pub_key: " pub }'
-  echo ""
-  echo "Next: edit validator.env (moniker, peers, etc.) and run 'make start'."
-}
 
 # Print one data field. Distinguishes three outcomes so operators can tell
 # "empty but normal" from "something is broken":
@@ -1251,31 +1097,20 @@ cmd_build() {
       prev_ok=1
     fi
     if ((prev_ok == 1)); then
-      local curr_gnokms curr_gnoland
-      curr_gnokms="$(content_hash_for gnokms)"
+      local curr_gnoland
       curr_gnoland="$(content_hash_for gnoland)"
       if [[ "${PREV_GNO_COMMIT:-}" == "${commit}" &&
         "${PREV_GNO_VERSION:-}" == "${version}" &&
         "${PREV_GNO_REPO:-}" == "${repo}" &&
-        "${PREV_GNOKMS_CONTENT_HASH:-}" == "${curr_gnokms}" &&
         "${PREV_GNOLAND_CONTENT_HASH:-}" == "${curr_gnoland}" ]] &&
-        docker image inspect "${PREV_GNOKMS_IMAGE_TAG:-}" >/dev/null 2>&1 &&
         docker image inspect "${PREV_GNOLAND_IMAGE_TAG:-}" >/dev/null 2>&1; then
-        echo "Nothing to rebuild — .build-state and images match current inputs."
+        echo "Nothing to rebuild — .build-state and image match current inputs."
         echo "  (pass force=1 to rebuild anyway)"
         return 0
       fi
     fi
   else
-    echo "FORCE=1 → rebuilding both images."
-  fi
-
-  ENTRYPOINT_HASH="$(sha256_of_file docker/gnokms-entrypoint.sh)"
-  export ENTRYPOINT_HASH
-  echo "==> Building gnokms image..."
-  if ! _compose build gnokms; then
-    err_build_failed
-    return 1
+    echo "FORCE=1 → rebuilding."
   fi
 
   ENTRYPOINT_HASH="$(sha256_of_file docker/gnoland-entrypoint.sh)"
@@ -1286,14 +1121,11 @@ cmd_build() {
     return 1
   fi
 
-  local gnokms_tag gnoland_tag
-  gnokms_tag="$(image_tag_for gnokms "$commit")"
+  local gnoland_tag
   gnoland_tag="$(image_tag_for gnoland "$commit")"
-  docker tag "$GNOKMS_IMAGE" "${GNOKMS_IMAGE}:${gnokms_tag}"
   docker tag "$GNOLAND_IMAGE" "${GNOLAND_IMAGE}:${gnoland_tag}"
   echo ""
   echo "Tagged:"
-  echo "  ${GNOKMS_IMAGE}:${gnokms_tag}"
   echo "  ${GNOLAND_IMAGE}:${gnoland_tag}"
 
   echo ""
@@ -1312,7 +1144,7 @@ cmd_build() {
 }
 
 cmd_start() {
-  preflight docker env_note genesis keystore
+  preflight docker env_note genesis
   classify_state
   resolve_input_hashes
 
@@ -1332,9 +1164,8 @@ cmd_start() {
     _fresh_up
     ;;
   stopped | mixed | restarting)
-    # Stopped fast-path — print drift once, then best-effort password check, then start.
+    # Stopped fast-path — print drift once, then start.
     ensure_images warn-if-stale
-    ensure_password best-effort
     echo "Starting containers (config will be regenerated from ${OVERRIDES_FILE})..."
     _compose start
     ;;
@@ -1363,7 +1194,7 @@ cmd_stop() {
   # explicitly — `${var^^}` is bash 4+, and macOS ships bash 3.2 as /bin/bash.
   local -a running_svcs=() stopped_svcs=()
   local pair svc_name var_name
-  for pair in "gnoland:STATE_GNOLAND" "gnokms:STATE_GNOKMS" "sentinel:STATE_SENTINEL"; do
+  for pair in "gnoland:STATE_GNOLAND" "sentinel:STATE_SENTINEL"; do
     svc_name="${pair%%:*}"
     var_name="${pair##*:}"
     case "${!var_name}" in
@@ -1387,7 +1218,7 @@ cmd_stop() {
 }
 
 cmd_restart() {
-  preflight docker env_note genesis keystore
+  preflight docker env_note genesis
   classify_state
   if [[ "$STATE_OVERALL" == "none" ]]; then
     err_no_containers_for_restart
@@ -1413,11 +1244,10 @@ cmd_logs() {
     echo "All containers stopped — showing logs from last run. Ctrl+C to exit."
   fi
 
-  # Per-service defaults: gnoland is noisy (bound tight), the others are
-  # sparse (show a full day). A single `since=X` arg overrides all three.
+  # Per-service defaults: gnoland is noisy (bound tight), sentinel is sparse
+  # (show a full day). A single `since=X` arg overrides both.
   local since_override="${SINCE:-}"
   local since_gnoland="${since_override:-1h}"
-  local since_gnokms="${since_override:-24h}"
   local since_sentinel="${since_override:-24h}"
 
   # gonzo is a TUI-only viewer with no stream mode; if it's not available
@@ -1455,11 +1285,11 @@ cmd_logs() {
       | . + {"service.name": $s}
     ) catch {"service.name": $s, "msg": $raw}'
 
-  # Architecture: gonzo runs in the FOREGROUND reading from a FIFO; three
+  # Architecture: gonzo runs in the FOREGROUND reading from a FIFO; two
   # feeder pipelines write to that FIFO in the background. When gonzo exits
-  # (user presses q), we kill the feeders — otherwise idle feeders
-  # (gnokms / sentinel with no recent logs) never get SIGPIPE and the
-  # script hangs, forcing the operator to Ctrl+C after quitting.
+  # (user presses q), we kill the feeders — otherwise an idle feeder
+  # (sentinel with no recent logs) never gets SIGPIPE and the script hangs,
+  # forcing the operator to Ctrl+C after quitting.
   #
   # State is kept in shell-global vars (_LOGS_*) rather than `local` because
   # the EXIT trap runs after cmd_logs returns, by which point locals are
@@ -1479,9 +1309,6 @@ cmd_logs() {
   # unblocks simultaneously.
   (_compose_noenv logs --no-log-prefix -f --since "$since_gnoland" gnoland 2>/dev/null |
     "$jq_bin" -cRM --unbuffered --arg s gnoland "$tag_program" >"$_LOGS_FIFO") &
-  _LOGS_FEED_PIDS="$! $_LOGS_FEED_PIDS"
-  (_compose_noenv logs --no-log-prefix -f --since "$since_gnokms" gnokms 2>/dev/null |
-    "$jq_bin" -cRM --unbuffered --arg s gnokms "$tag_program" >"$_LOGS_FIFO") &
   _LOGS_FEED_PIDS="$! $_LOGS_FEED_PIDS"
   (_compose_noenv logs --no-log-prefix -f --since "$since_sentinel" sentinel 2>/dev/null |
     "$jq_bin" -cRM --unbuffered --arg s sentinel "$tag_program" >"$_LOGS_FIFO") &
@@ -1669,13 +1496,13 @@ cmd_reset() {
   local was_running=0
   if check_docker; then
     classify_state
-    [[ "${STATE_GNOLAND:-absent}" == "running" || "${STATE_GNOKMS:-absent}" == "running" ]] && was_running=1
+    [[ "${STATE_GNOLAND:-absent}" == "running" ]] && was_running=1
   fi
 
   echo "About to reset chain state."
   echo "  Will delete: ${GNOLAND_DATA}/db, ${GNOLAND_DATA}/wal"
   echo "  Will reset : ${pv_state}"
-  echo "  Will keep  : keystore (${GNOKMS_DATA}/), validator keys, node_id, config"
+  echo "  Will keep  : validator key (${GNOLAND_DATA}/secrets/), node_id, config"
 
   # yes=1 skips every interactive prompt in this flow (Continue, Stop-first,
   # Start-again). Defaults when skipped: proceed, stop-then-reset, start-again.
@@ -1717,12 +1544,9 @@ cmd_reset() {
   fi
 }
 
-# List all locally built gno-validator image tags (both repositories).
+# List all locally built gno-validator image tags.
 _list_validator_images() {
-  {
-    docker images --format '{{.Repository}}:{{.Tag}}' "$GNOKMS_IMAGE"
-    docker images --format '{{.Repository}}:{{.Tag}}' "$GNOLAND_IMAGE"
-  } | sort -u
+  docker images --format '{{.Repository}}:{{.Tag}}' "$GNOLAND_IMAGE" | sort -u
 }
 
 # List sentinel images present locally.
@@ -1730,19 +1554,18 @@ _list_sentinel_images() {
   docker images --format '{{.Repository}}:{{.Tag}}' 'ghcr.io/aeddi/gno-watchtower/sentinel' | sort -u
 }
 
-# Given a list of gnokms/gnoland tags on stdin, print the ones considered
-# "stale" (not matching the current content-addressed tag or :latest).
-# Requires .build-state loaded as PREV_* and GNO_COMMIT_HASH resolved.
+# Given a list of gnoland tags on stdin, print the ones considered "stale"
+# (not matching the current content-addressed tag or :latest). Requires
+# .build-state loaded as PREV_* and GNO_COMMIT_HASH resolved.
 _classify_stale_tags() {
-  local curr_gnokms_tag curr_gnoland_tag
-  curr_gnokms_tag="${GNOKMS_IMAGE}:$(image_tag_for gnokms "$GNO_COMMIT_HASH")"
+  local curr_gnoland_tag
   curr_gnoland_tag="${GNOLAND_IMAGE}:$(image_tag_for gnoland "$GNO_COMMIT_HASH")"
   local line
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     case "$line" in
-    "${GNOKMS_IMAGE}:latest" | "${GNOLAND_IMAGE}:latest") ;;
-    "$curr_gnokms_tag" | "$curr_gnoland_tag") ;;
+    "${GNOLAND_IMAGE}:latest") ;;
+    "$curr_gnoland_tag") ;;
     *) printf '%s\n' "$line" ;;
     esac
   done
@@ -1856,7 +1679,7 @@ cmd_clean_imgs() {
 }
 
 cmd_update() {
-  preflight docker env_note genesis keystore
+  preflight docker env_note genesis
   local force="${FORCE:-0}"
   resolve_gno_inputs
   classify_state
@@ -1938,8 +1761,7 @@ cmd_update() {
     esac
   done
   echo ""
-  echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, keys, config), ${GNOKMS_DATA}/ (keystore),"
-  echo "           ${GENESIS_FILE}, and named volumes (gnokms-sock)."
+  echo "Preserved: ${GNOLAND_DATA}/ (chain db, wal, validator key, config), ${GENESIS_FILE}."
   echo ""
 
   if ((force == 0)); then
@@ -1981,7 +1803,6 @@ fi
 shift
 
 case "$cmd" in
-gen-identity) cmd_gen_identity ;;
 infos) cmd_infos ;;
 build) cmd_build ;;
 start) cmd_start ;;
