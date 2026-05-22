@@ -4,12 +4,11 @@
 # Format: key = value (one per line; # for comments; blank lines ignored)
 
 # ---- System-hardcoded keys (overridden by the entrypoint, cannot be customized)
-# p2p.laddr                                              = "tcp://0.0.0.0:26656"        # in-container P2P bind (see validator.env for host listener/port)
-# rpc.laddr                                              = "tcp://0.0.0.0:26657"        # in-container RPC bind (see validator.env for host listener/port)
-# consensus.priv_validator.remote_signer.server_address  = "unix:///sock/gnokms.sock"   # gnokms socket
-# telemetry.metrics_enabled                              = true
-# telemetry.traces_enabled                               = true
-# telemetry.exporter_endpoint                            = "http://sentinel:4318"
+# p2p.laddr                  = "tcp://0.0.0.0:26656"        # in-container P2P bind (see validator.env for host listener/port)
+# rpc.laddr                  = "tcp://0.0.0.0:26657"        # in-container RPC bind (see validator.env for host listener/port)
+# telemetry.metrics_enabled  = true
+# telemetry.traces_enabled   = true
+# telemetry.exporter_endpoint = "http://sentinel:4318"
 
 # ---- Required node settings
 moniker = "anon-val-01"
