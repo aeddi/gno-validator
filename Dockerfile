@@ -1,5 +1,5 @@
 # ----- Builder stage: clones gno source, builds the gnoland binary
-FROM    golang:1.24-alpine AS builder
+FROM    golang:1.25-alpine AS builder
 ENV     GNOROOT="/gnoroot"
 ARG     GNO_VERSION=master
 ARG     GNO_REPO=gnolang/gno
